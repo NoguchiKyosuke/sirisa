@@ -133,10 +133,15 @@ CELERY_TIMEZONE = 'Asia/Tokyo'
 # Gemini API
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
-# Gmail API
-GMAIL_CREDENTIALS_PATH = os.getenv('GMAIL_CREDENTIALS_PATH', '')
-GMAIL_TOKEN_PATH = os.getenv('GMAIL_TOKEN_PATH', '')
-GMAIL_SENDER_EMAIL = os.getenv('GMAIL_SENDER_EMAIL', 'ryotatakahashi0123@gmail.com')
+# Gmail SMTP
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.getenv('GMAIL_SENDER_EMAIL', 'k.noguchi2005@gmail.com')
+GMAIL_SENDER_EMAIL = os.getenv('GMAIL_SENDER_EMAIL', 'k.noguchi2005@gmail.com')
 
 # ログ設定
 LOG_DIR = Path(__file__).resolve().parent.parent.parent.parent / 'logs'

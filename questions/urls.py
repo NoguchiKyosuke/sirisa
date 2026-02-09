@@ -7,6 +7,7 @@ from . import views
 app_name = 'questions'
 
 urlpatterns = [
+    path('', views.QuestionListView.as_view(), name='list'),
     path('new/', views.QuestionCreateView.as_view(), name='create'),
     path('my/', views.MyQuestionListView.as_view(), name='my_list'),
     path('<int:pk>/', views.QuestionDetailView.as_view(), name='detail'),

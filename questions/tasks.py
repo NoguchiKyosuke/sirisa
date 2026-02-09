@@ -31,7 +31,7 @@ def generate_ai_answer(self, question_id):
 
     # Geminiシステムユーザを取得
     try:
-        gemini_user = User.objects.get(role='ai_agent', username='Gemini')
+        gemini_user = User.objects.get(role='ai_agent')
     except User.DoesNotExist:
         logger.error('Geminiシステムユーザが見つかりません')
         return

@@ -71,7 +71,7 @@ function saveDraft() {
     if (!body) return;
 
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
-    fetch('{% url "questions:answer_draft_api" %}', {
+    fetch('{% url "questions:draft_answer" %}', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
