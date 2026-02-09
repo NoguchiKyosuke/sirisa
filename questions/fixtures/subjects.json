@@ -1,0 +1,20 @@
+[
+  {"model": "questions.subject", "pk": 1, "fields": {"name": "国語", "is_custom": false, "is_deleted": false, "order": 1}},
+  {"model": "questions.subject", "pk": 2, "fields": {"name": "数学", "is_custom": false, "is_deleted": false, "order": 2}},
+  {"model": "questions.subject", "pk": 3, "fields": {"name": "英語", "is_custom": false, "is_deleted": false, "order": 3}},
+  {"model": "questions.subject", "pk": 4, "fields": {"name": "物理", "is_custom": false, "is_deleted": false, "order": 4}},
+  {"model": "questions.subject", "pk": 5, "fields": {"name": "化学", "is_custom": false, "is_deleted": false, "order": 5}},
+  {"model": "questions.subject", "pk": 6, "fields": {"name": "生物", "is_custom": false, "is_deleted": false, "order": 6}},
+  {"model": "questions.subject", "pk": 7, "fields": {"name": "地学", "is_custom": false, "is_deleted": false, "order": 7}},
+  {"model": "questions.subject", "pk": 8, "fields": {"name": "日本史", "is_custom": false, "is_deleted": false, "order": 8}},
+  {"model": "questions.subject", "pk": 9, "fields": {"name": "世界史", "is_custom": false, "is_deleted": false, "order": 9}},
+  {"model": "questions.subject", "pk": 10, "fields": {"name": "地理", "is_custom": false, "is_deleted": false, "order": 10}},
+  {"model": "questions.subject", "pk": 11, "fields": {"name": "政治経済", "is_custom": false, "is_deleted": false, "order": 11}},
+  {"model": "questions.subject", "pk": 12, "fields": {"name": "倫理", "is_custom": false, "is_deleted": false, "order": 12}},
+  {"model": "questions.subject", "pk": 13, "fields": {"name": "情報", "is_custom": false, "is_deleted": false, "order": 13}},
+  {"model": "questions.subject", "pk": 14, "fields": {"name": "保健体育", "is_custom": false, "is_deleted": false, "order": 14}},
+  {"model": "questions.subject", "pk": 15, "fields": {"name": "音楽", "is_custom": false, "is_deleted": false, "order": 15}},
+  {"model": "questions.subject", "pk": 16, "fields": {"name": "美術", "is_custom": false, "is_deleted": false, "order": 16}},
+  {"model": "questions.subject", "pk": 17, "fields": {"name": "家庭科", "is_custom": false, "is_deleted": false, "order": 17}},
+  {"model": "questions.subject", "pk": 18, "fields": {"name": "その他", "is_custom": true, "is_deleted": false, "order": 99}}
+]

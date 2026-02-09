@@ -1,0 +1,118 @@
+{% extends 'base.html' %}
+{% block title %}質問を投稿{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <h3 class="mb-4"><i class="bi bi-pencil-square"></i> 質問を投稿</h3>
+            <form method="post" enctype="multipart/form-data" id="questionForm">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label for="id_title" class="form-label fw-bold">質問タイトル</label>
+                    {{ form.title }}
+                    {% for error in form.title.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">教科</label>
+                    {{ form.subject }}
+                    {{ form.custom_subject }}
+                    {% for error in form.subject.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">フォーマット</label>
+                    <div class="d-flex gap-3">
+                        {% for radio in form.body_format %}
+                        <div class="form-check">
+                            {{ radio.tag }}
+                            <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_body" class="form-label fw-bold">本文</label>
+                    {{ form.body }}
+                    {% for error in form.body.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">メディアファイル</label>
+                    <input type="file" name="files" class="form-control" multiple
+                           accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt">
+                    <div class="form-text">画像、音声、動画ファイルを添付できます（合計100MBまで）</div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="auto-save-indicator" id="autoSaveStatus"></span>
+                    <div>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary me-2">キャンセル</a>
+                        <button type="submit" class="btn btn-sirisa">
+                            <i class="bi bi-send"></i> 投稿する
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 「その他」選択時にカスタム教科入力欄を表示
+document.getElementById('id_subject').addEventListener('change', function() {
+    const customField = document.getElementById('id_custom_subject');
+    const selectedText = this.options[this.selectedIndex].text;
+    customField.style.display = selectedText === 'その他' ? 'block' : 'none';
+});
+
+// 自動保存（30秒ごと）
+let autoSaveTimer;
+function autoSave() {
+    const form = document.getElementById('questionForm');
+    const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+    const data = {
+        title: document.getElementById('id_title').value,
+        subject_id: document.getElementById('id_subject').value || null,
+        custom_subject: document.getElementById('id_custom_subject').value,
+        body: document.getElementById('id_body').value,
+        body_format: document.querySelector('input[name=body_format]:checked')?.value || 'text',
+    };
+
+    fetch('{% url "questions:draft_question" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify(data),
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('autoSaveStatus').textContent = '自動保存済み ' + new Date().toLocaleTimeString('ja-JP');
+    })
+    .catch(() => {
+        document.getElementById('autoSaveStatus').textContent = '自動保存に失敗';
+    });
+}
+
+// 入力があったら30秒後に自動保存
+document.querySelectorAll('#questionForm input, #questionForm textarea, #questionForm select').forEach(el => {
+    el.addEventListener('input', () => {
+        clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(autoSave, 30000);
+    });
+});
+</script>
+{% endblock %}

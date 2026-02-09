@@ -1,0 +1,108 @@
+{% extends 'base.html' %}
+{% block title %}質問を編集{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4 mb-4">
+            <h3 class="mb-4"><i class="bi bi-pencil"></i> 質問を編集</h3>
+            <form method="post" enctype="multipart/form-data" id="editForm">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label for="id_title" class="form-label fw-bold">質問タイトル</label>
+                    {{ form.title }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">教科</label>
+                    {{ form.subject }}
+                    {{ form.custom_subject }}
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">フォーマット</label>
+                    <div class="d-flex gap-3">
+                        {% for radio in form.body_format %}
+                        <div class="form-check">
+                            {{ radio.tag }}
+                            <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_body" class="form-label fw-bold">本文</label>
+                    {{ form.body }}
+                </div>
+
+                <!-- 既存メディアファイル -->
+                {% if media_files %}
+                <div class="mb-3">
+                    <label class="form-label fw-bold">添付ファイル</label>
+                    <div class="list-group">
+                        {% for media in media_files %}
+                        <div class="list-group-item d-flex justify-content-between align-items-center">
+                            <span>
+                                {% if media.media_type == 'image' %}<i class="bi bi-image"></i>
+                                {% elif media.media_type == 'audio' %}<i class="bi bi-music-note"></i>
+                                {% elif media.media_type == 'video' %}<i class="bi bi-camera-video"></i>
+                                {% else %}<i class="bi bi-file-earmark"></i>{% endif %}
+                                {{ media.original_name }}
+                                <small class="text-muted">({{ media.file_size|filesizeformat }})</small>
+                            </span>
+                            <label class="form-check">
+                                <input type="checkbox" name="delete_media" value="{{ media.pk }}" class="form-check-input">
+                                <span class="text-danger small">削除</span>
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label class="form-label fw-bold">新しいファイルを追加</label>
+                    <input type="file" name="files" class="form-control" multiple
+                           accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt">
+                    <div class="form-text">合計100MBまで</div>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a href="{% url 'questions:detail' question.pk %}" class="btn btn-outline-secondary">キャンセル</a>
+                    <button type="submit" class="btn btn-sirisa">
+                        <i class="bi bi-check-lg"></i> 更新する
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- 回答管理セクション -->
+        {% if answers %}
+        <div class="card p-4">
+            <h4 class="mb-3">回答の管理</h4>
+            {% for answer in answers %}
+            <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                <div>
+                    {% if answer.is_ai_generated %}
+                    <span class="ai-badge">🤖 AI</span>
+                    {% endif %}
+                    <strong>{{ answer.user.username }}</strong>
+                    <small class="text-muted ms-2">{{ answer.created_at|date:"Y-m-d H:i" }}</small>
+                    <p class="mb-0 text-muted small mt-1">{{ answer.body|truncatechars:100 }}</p>
+                </div>
+                <form method="post" action="{% url 'questions:answer_delete' answer.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('この回答を削除しますか？')">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

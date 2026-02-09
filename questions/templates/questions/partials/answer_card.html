@@ -1,0 +1,78 @@
+<div class="card mb-3 {% if answer.is_ai_generated %}border-info{% endif %}">
+    <div class="card-body">
+        <!-- ヘッダー -->
+        <div class="d-flex justify-content-between align-items-start mb-2">
+            <div>
+                {% if answer.is_ai_generated %}
+                <span class="badge bg-info text-dark me-1"><i class="bi bi-robot"></i> AI回答</span>
+                <small class="text-muted">({{ answer.ai_model }})</small>
+                {% else %}
+                <i class="bi bi-person"></i>
+                <strong>{{ answer.user.username }}</strong>
+                {% endif %}
+                <span class="text-muted small ms-2">{{ answer.created_at|date:"Y-m-d H:i" }}</span>
+            </div>
+            {% if answer.is_ai_generated and answer.ai_generation_status == 'failed' %}
+            <span class="badge bg-danger">生成失敗</span>
+            {% endif %}
+        </div>
+
+        <!-- 回答本文 -->
+        {% with body_len=answer.body|length %}
+        {% if body_len > 500 %}
+        <div class="answer-body answer-collapsed" id="answer-body-{{ answer.pk }}">
+            {{ answer.rendered_body|safe }}
+        </div>
+        <button class="btn btn-link btn-sm p-0 mt-1" onclick="toggleExpand(this)">展開する</button>
+        {% else %}
+        <div class="answer-body">
+            {{ answer.rendered_body|safe }}
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <!-- メディアファイル -->
+        {% if answer.media_files.all %}
+        <div class="border-top pt-2 mt-2">
+            <small class="text-muted">添付ファイル:</small>
+            <div class="row g-2 mt-1">
+                {% for media in answer.media_files.all %}
+                <div class="col-md-4">
+                    {% if media.media_type == 'image' %}
+                    <img src="{{ media.file.url }}" class="img-fluid rounded" alt="{{ media.original_name }}">
+                    {% elif media.media_type == 'audio' %}
+                    <audio controls class="w-100"><source src="{{ media.file.url }}"></audio>
+                    {% elif media.media_type == 'video' %}
+                    <video controls class="w-100 rounded"><source src="{{ media.file.url }}"></video>
+                    {% else %}
+                    <a href="{{ media.file.url }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-download"></i> {{ media.original_name }}
+                    </a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- リアクション -->
+        {% include 'questions/partials/reaction_buttons.html' with answer=answer %}
+    </div>
+</div>
+
+<style>
+.answer-collapsed {
+    max-height: 200px;
+    overflow: hidden;
+    position: relative;
+}
+.answer-collapsed::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(transparent, white);
+}
+</style>

@@ -1,0 +1,85 @@
+{% extends 'base.html' %}
+{% block title %}自分の投稿一覧{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h3><i class="bi bi-list-check"></i> 自分の投稿一覧</h3>
+    <a href="{% url 'questions:create' %}" class="btn btn-sirisa">
+        <i class="bi bi-plus-lg"></i> 新しい質問
+    </a>
+</div>
+
+{% if questions %}
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead>
+                <tr>
+                    <th>質問タイトル</th>
+                    <th>教科</th>
+                    <th>投稿日時</th>
+                    <th>状態</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for q in questions %}
+                <tr>
+                    <td>
+                        <a href="{% url 'questions:detail' q.pk %}" class="text-decoration-none">
+                            {{ q.title }}
+                        </a>
+                    </td>
+                    <td><span class="badge bg-secondary">{{ q.display_subject }}</span></td>
+                    <td class="text-muted small">{{ q.created_at|date:"Y-m-d H:i" }}</td>
+                    <td>
+                        {% if q.is_resolved %}
+                        <span class="badge bg-success">解決済み</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark">未解決</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{% url 'questions:edit' q.pk %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i> 編集
+                        </a>
+                        <button class="btn btn-sm btn-outline-danger"
+                                data-bs-toggle="modal" data-bs-target="#deleteModal{{ q.pk }}">
+                            <i class="bi bi-trash"></i> 削除
+                        </button>
+                        <!-- 削除確認モーダル -->
+                        <div class="modal fade" id="deleteModal{{ q.pk }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">削除確認</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        「{{ q.title }}」を削除しますか？この操作は取り消せません。
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                                        <form method="post" action="{% url 'questions:delete' q.pk %}">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger">削除する</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+    <p class="text-muted mt-3">まだ質問を投稿していません。</p>
+    <a href="{% url 'questions:create' %}" class="btn btn-sirisa">最初の質問を投稿する</a>
+</div>
+{% endif %}
+{% endblock %}

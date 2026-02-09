@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}メール認証{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-5 col-lg-4">
+        <div class="card p-4 mt-5">
+            <h2 class="text-center mb-3"><i class="bi bi-envelope-check"></i></h2>
+            <h4 class="text-center mb-3">メール認証</h4>
+            <p class="text-center text-muted mb-4">
+                メールに送信された6桁の認証コードを入力してください。
+            </p>
+            <form method="post">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="mb-3">
+                    {{ field }}
+                    {% for error in field.errors %}
+                    <div class="text-danger small mt-1">{{ error }}</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+                <button type="submit" class="btn btn-sirisa w-100 mb-3">
+                    <i class="bi bi-check-circle"></i> 認証する
+                </button>
+            </form>
+            <div class="text-center">
+                <form method="post" action="{% url 'accounts:resend_code' %}" class="d-inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-link text-decoration-none">
+                        認証コードを再送信する
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

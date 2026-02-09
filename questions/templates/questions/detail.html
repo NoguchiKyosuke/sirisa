@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}{{ question.title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <!-- 質問カード -->
+        <div class="card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start mb-3">
+                <div>
+                    <h3 class="mb-1">{{ question.title }}</h3>
+                    <div class="text-muted small">
+                        <i class="bi bi-person"></i> {{ question.user.username }}
+                        <span class="mx-1">|</span>
+                        <i class="bi bi-clock"></i> {{ question.created_at|date:"Y-m-d H:i" }}
+                        <span class="mx-1">|</span>
+                        <span class="badge bg-secondary">{{ question.display_subject }}</span>
+                        {% if question.is_resolved %}
+                        <span class="badge bg-success ms-1">解決済み</span>
+                        {% else %}
+                        <span class="badge bg-warning text-dark ms-1">未解決</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 質問本文 -->
+            <div class="border-top pt-3">
+                {{ rendered_body|safe }}
+            </div>
+
+            <!-- メディアファイル -->
+            {% if media_files %}
+            <div class="border-top pt-3 mt-3">
+                <h6>添付ファイル</h6>
+                <div class="row g-2">
+                    {% for media in media_files %}
+                    <div class="col-md-4">
+                        {% if media.media_type == 'image' %}
+                        <img src="{{ media.file.url }}" class="img-fluid rounded" alt="{{ media.original_name }}">
+                        {% elif media.media_type == 'audio' %}
+                        <audio controls class="w-100"><source src="{{ media.file.url }}"></audio>
+                        {% elif media.media_type == 'video' %}
+                        <video controls class="w-100 rounded"><source src="{{ media.file.url }}"></video>
+                        {% else %}
+                        <a href="{{ media.file.url }}" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-download"></i> {{ media.original_name }}
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- アクションバー -->
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            <a href="{% url 'questions:answer' question.pk %}" class="btn btn-sirisa">
+                <i class="bi bi-reply"></i> 回答する
+            </a>
+            <a href="{% url 'questions:list' %}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 質問一覧
+            </a>
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                    <i class="bi bi-download"></i> エクスポート
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a class="dropdown-item" href="{% url 'questions:export' question.pk %}?format=csv">CSV</a></li>
+                    <li><a class="dropdown-item" href="{% url 'questions:export' question.pk %}?format=xlsx">XLSX</a></li>
+                    <li><a class="dropdown-item" href="{% url 'questions:export' question.pk %}?format=pdf">PDF</a></li>
+                    <li><a class="dropdown-item" href="{% url 'questions:export' question.pk %}?format=md">Markdown</a></li>
+                    <li><a class="dropdown-item" href="{% url 'questions:export' question.pk %}?format=txt">テキスト</a></li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- 回答一覧 -->
+        <h4 class="mb-3"><i class="bi bi-chat-dots"></i> 回答</h4>
+
+        {% for answer in answers %}
+            {% if answer.is_ai_generated and answer.ai_generation_status == 'pending' %}
+                <!-- AI回答生成中 -->
+                <div id="ai-answer-{{ answer.pk }}"
+                     hx-get="{% url 'questions:answer_status' answer.pk %}"
+                     hx-trigger="every 5s"
+                     hx-swap="outerHTML">
+                    {% include 'questions/partials/ai_answer_loading.html' with answer=answer %}
+                </div>
+            {% else %}
+                {% include 'questions/partials/answer_card.html' with answer=answer %}
+            {% endif %}
+        {% empty %}
+        <div class="text-center py-4 text-muted">
+            <i class="bi bi-chat" style="font-size: 2rem;"></i>
+            <p class="mt-2">まだ回答がありません。最初の回答を投稿しましょう！</p>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// リアクション切替
+function toggleReaction(answerId, emojiType, btn) {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
+        || '{{ csrf_token }}';
+
+    fetch('{% url "questions:reaction_toggle" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({ answer_id: answerId, emoji_type: emojiType }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        // ボタンの状態を更新
+        btn.classList.toggle('active', data.active);
+        // カウントを更新
+        const container = btn.closest('.reaction-container');
+        Object.entries(data.counts).forEach(([emoji, count]) => {
+            const countEl = container.querySelector(`[data-count="${emoji}"]`);
+            if (countEl) countEl.textContent = count || '';
+        });
+    });
+}
+
+// 長い回答の展開/折りたたみ
+function toggleExpand(btn) {
+    const body = btn.previousElementSibling;
+    body.classList.toggle('answer-collapsed');
+    btn.textContent = body.classList.contains('answer-collapsed') ? '展開する' : '折りたたむ';
+}
+</script>
+{% endblock %}

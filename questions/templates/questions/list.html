@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}質問を探す{% endblock %}
+
+{% block content %}
+<h3 class="mb-4"><i class="bi bi-search"></i> 質問を探す</h3>
+
+<!-- フィルタ・ソート -->
+<div class="card p-3 mb-4">
+    <form method="get" id="filterForm"
+          hx-get="{% url 'questions:list' %}" hx-target="#questionTable" hx-swap="innerHTML">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small">教科</label>
+                <select name="subject" class="form-select form-select-sm"
+                        hx-get="{% url 'questions:list' %}" hx-target="#questionTable" hx-include="#filterForm">
+                    <option value="">すべて</option>
+                    {% for s in subjects %}
+                    <option value="{{ s.pk }}" {% if current_subject == s.pk|stringformat:"d" %}selected{% endif %}>
+                        {{ s.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small">ユーザ名</label>
+                <input type="text" name="username" class="form-control form-control-sm"
+                       value="{{ current_username }}" placeholder="検索...">
+            </div>
+            <div class="col-md-2">
+                <div class="form-check mt-4">
+                    <input type="checkbox" name="unresolved" value="1" class="form-check-input"
+                           {% if current_unresolved %}checked{% endif %}
+                           hx-get="{% url 'questions:list' %}" hx-target="#questionTable" hx-include="#filterForm">
+                    <label class="form-check-label small">未解決のみ</label>
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">ソート</label>
+                <select name="sort" class="form-select form-select-sm"
+                        hx-get="{% url 'questions:list' %}" hx-target="#questionTable" hx-include="#filterForm">
+                    <option value="updated" {% if current_sort == 'updated' %}selected{% endif %}>更新順</option>
+                    <option value="name" {% if current_sort == 'name' %}selected{% endif %}>名前順</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-sm btn-sirisa w-100">
+                    <i class="bi bi-search"></i> 検索
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- 質問テーブル -->
+<div id="questionTable">
+    {% include 'questions/partials/question_list.html' %}
+</div>
+{% endblock %}

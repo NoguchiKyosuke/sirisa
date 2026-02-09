@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block title %}回答する - {{ question.title }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <!-- 質問情報 -->
+        <div class="card p-3 mb-4">
+            <h5 class="mb-1">{{ question.title }}</h5>
+            <div class="text-muted small">
+                <i class="bi bi-person"></i> {{ question.user.username }}
+                <span class="mx-1">|</span>
+                <span class="badge bg-secondary">{{ question.display_subject }}</span>
+            </div>
+        </div>
+
+        <h4 class="mb-3"><i class="bi bi-reply"></i> 回答を投稿</h4>
+        <div class="card p-4">
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+
+                <div class="mb-3">
+                    <label for="id_body_format" class="form-label">入力形式</label>
+                    {{ form.body_format }}
+                </div>
+
+                <div class="mb-3">
+                    <label for="id_body" class="form-label">回答内容 <span class="text-danger">*</span></label>
+                    {{ form.body }}
+                    {% if form.body.errors %}
+                    <div class="invalid-feedback d-block">{{ form.body.errors.0 }}</div>
+                    {% endif %}
+                </div>
+
+                <!-- メディアアップロード -->
+                <div class="mb-3">
+                    <label class="form-label">ファイル添付（任意）</label>
+                    <input type="file" name="media_files" class="form-control" multiple
+                           accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx">
+                    <div class="form-text">画像、音声、動画、ドキュメント（最大30MB/ファイル）</div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-sirisa">
+                        <i class="bi bi-send"></i> 回答を投稿
+                    </button>
+                    <a href="{% url 'questions:detail' question.pk %}" class="btn btn-outline-secondary">
+                        キャンセル
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// 下書き自動保存
+let draftTimer;
+const bodyField = document.getElementById('id_body');
+if (bodyField) {
+    bodyField.addEventListener('input', function() {
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(saveDraft, 30000);
+    });
+}
+
+function saveDraft() {
+    const body = document.getElementById('id_body')?.value;
+    if (!body) return;
+
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+    fetch('{% url "questions:answer_draft_api" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+            question_id: {{ question.pk }},
+            body: body,
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'ok') {
+            console.log('下書き保存完了');
+        }
+    });
+}
+</script>
+{% endblock %}
