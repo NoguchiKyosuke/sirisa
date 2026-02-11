@@ -3,27 +3,27 @@
     <button class="btn btn-sm btn-outline-secondary reaction-btn {% if 'thumbs_up' in user_reactions %}active{% endif %}"
             onclick="toggleReaction({{ answer.pk }}, 'thumbs_up', this)"
             title="いいね">
-        👍 <span data-count="thumbs_up">{{ answer.thumbs_up_count|default:"" }}</span>
+        👍 <span data-count="thumbs_up" style="color: var(--bs-body-color, #333);">{{ answer.thumbs_up_count|default:"" }}</span>
     </button>
     <button class="btn btn-sm btn-outline-secondary reaction-btn {% if 'thumbs_down' in user_reactions %}active{% endif %}"
             onclick="toggleReaction({{ answer.pk }}, 'thumbs_down', this)"
             title="よくない">
-        👎 <span data-count="thumbs_down">{{ answer.thumbs_down_count|default:"" }}</span>
+        👎 <span data-count="thumbs_down" style="color: var(--bs-body-color, #333);">{{ answer.thumbs_down_count|default:"" }}</span>
     </button>
     <button class="btn btn-sm btn-outline-secondary reaction-btn {% if 'heart' in user_reactions %}active{% endif %}"
             onclick="toggleReaction({{ answer.pk }}, 'heart', this)"
             title="ハート">
-        ❤️ <span data-count="heart">{{ answer.heart_count|default:"" }}</span>
+        ❤️ <span data-count="heart" style="color: var(--bs-body-color, #333);">{{ answer.heart_count|default:"" }}</span>
     </button>
     <button class="btn btn-sm btn-outline-secondary reaction-btn {% if 'celebration' in user_reactions %}active{% endif %}"
             onclick="toggleReaction({{ answer.pk }}, 'celebration', this)"
             title="お祝い">
-        🎉 <span data-count="celebration">{{ answer.celebration_count|default:"" }}</span>
+        🎉 <span data-count="celebration" style="color: var(--bs-body-color, #333);">{{ answer.celebration_count|default:"" }}</span>
     </button>
     <button class="btn btn-sm btn-outline-secondary reaction-btn {% if 'idea' in user_reactions %}active{% endif %}"
             onclick="toggleReaction({{ answer.pk }}, 'idea', this)"
             title="ひらめき">
-        💡 <span data-count="idea">{{ answer.idea_count|default:"" }}</span>
+        💡 <span data-count="idea" style="color: var(--bs-body-color, #333);">{{ answer.idea_count|default:"" }}</span>
     </button>
     {% endwith %}
 </div>

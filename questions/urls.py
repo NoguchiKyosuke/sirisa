@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:pk>/', views.QuestionDetailView.as_view(), name='detail'),
     path('<int:pk>/edit/', views.QuestionEditView.as_view(), name='edit'),
     path('<int:pk>/delete/', views.QuestionDeleteView.as_view(), name='delete'),
+    path('<int:pk>/toggle-resolve/', views.QuestionToggleResolveView.as_view(), name='toggle_resolve'),
     path('<int:pk>/answer/', views.AnswerCreateView.as_view(), name='answer'),
     path('<int:pk>/export/', views.QuestionExportView.as_view(), name='export'),
     path('answer/<int:pk>/delete/', views.AnswerDeleteView.as_view(), name='answer_delete'),

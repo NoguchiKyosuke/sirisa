@@ -1,4 +1,7 @@
-<div class="card mb-3 border-info" id="ai-answer-{{ answer.pk }}">
+<div class="card mb-3 border-info" id="ai-answer-{{ answer.pk }}"
+     hx-get="{% url 'questions:answer_status' answer.pk %}"
+     hx-trigger="every 5s"
+     hx-swap="outerHTML">
     <div class="card-body text-center py-4">
         <div class="spinner-border text-info mb-3" role="status">
             <span class="visually-hidden">生成中...</span>

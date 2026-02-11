@@ -2,6 +2,7 @@
 SIRISA Gemini APIサービス
 質問に対するAI回答を生成する
 """
+import re
 import logging
 import bleach
 from django.conf import settings
@@ -15,25 +16,47 @@ ALLOWED_TAGS = [
     'code', 'pre', 'table', 'tr', 'td', 'th', 'thead', 'tbody',
     'br', 'hr', 'blockquote', 'span', 'div',
     'a', 'sup', 'sub', 'dl', 'dt', 'dd',
+    'caption', 'colgroup', 'col', 'details', 'summary',
+    'figure', 'figcaption', 'mark', 'small', 'abbr',
 ]
 
 ALLOWED_ATTRIBUTES = {
     '*': ['class', 'style'],
     'a': ['href', 'title'],
-    'th': ['colspan', 'rowspan'],
+    'th': ['colspan', 'rowspan', 'scope'],
     'td': ['colspan', 'rowspan'],
+    'col': ['span'],
+    'abbr': ['title'],
 }
+
+# 許可するCSSプロパティ
+ALLOWED_STYLES = [
+    'color', 'background-color', 'background', 'border', 'border-radius',
+    'padding', 'margin', 'font-weight', 'font-size', 'text-align',
+    'display', 'width', 'max-width', 'min-width',
+    'border-left', 'border-right', 'border-top', 'border-bottom',
+    'border-collapse', 'vertical-align', 'list-style-type',
+    'overflow', 'white-space',
+]
+
+
+def strip_code_fences(text):
+    """
+    Geminiの出力から ```html...``` や ```...``` のコードフェンスを除去する
+    """
+    # ```html\n...\n``` パターン
+    match = re.search(r'```(?:html)?\s*\n(.*?)\n\s*```', text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    # 先頭の ```html と末尾の ``` を除去
+    text = re.sub(r'^```(?:html)?\s*\n?', '', text.strip())
+    text = re.sub(r'\n?```\s*$', '', text.strip())
+    return text.strip()
 
 
 def sanitize_html(html_content):
     """
     Geminiの出力HTMLをサニタイズする
-
-    Args:
-        html_content: サニタイズ対象のHTML文字列
-
-    Returns:
-        サニタイズ済みのHTML文字列
     """
     return bleach.clean(
         html_content,
@@ -98,8 +121,10 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
         )
 
         if response.text:
+            # コードフェンス（```html...```）を除去
+            html_answer = strip_code_fences(response.text)
+
             # HTMLタグが含まれていない場合は<p>タグで囲む
-            html_answer = response.text
             if not any(tag in html_answer for tag in ['<p>', '<h', '<div>', '<ul>', '<ol>']):
                 html_answer = f'<div>{html_answer}</div>'
 

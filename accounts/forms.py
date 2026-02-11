@@ -1,5 +1,6 @@
 """
 SIRISA アカウントフォーム
+パスワードレス認証（メール認証のみ）
 """
 from django import forms
 from django.contrib.auth import get_user_model
@@ -8,7 +9,7 @@ User = get_user_model()
 
 
 class LoginForm(forms.Form):
-    """ログインフォーム"""
+    """ログインフォーム（メールアドレスのみ）"""
     email = forms.EmailField(
         label='メールアドレス',
         widget=forms.EmailInput(attrs={
@@ -17,31 +18,10 @@ class LoginForm(forms.Form):
             'autofocus': True,
         }),
     )
-    password = forms.CharField(
-        label='パスワード',
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'パスワード',
-        }),
-    )
 
 
 class RegisterForm(forms.ModelForm):
-    """新規登録フォーム"""
-    password = forms.CharField(
-        label='パスワード',
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'パスワード',
-        }),
-    )
-    password_confirm = forms.CharField(
-        label='パスワード（確認）',
-        widget=forms.PasswordInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'パスワード（確認）',
-        }),
-    )
+    """新規登録フォーム（パスワードなし）"""
 
     class Meta:
         model = User
@@ -57,17 +37,17 @@ class RegisterForm(forms.ModelForm):
             }),
         }
 
-    def clean(self):
-        cleaned_data = super().clean()
-        password = cleaned_data.get('password')
-        password_confirm = cleaned_data.get('password_confirm')
-        if password and password_confirm and password != password_confirm:
-            raise forms.ValidationError('パスワードが一致しません。')
-        return cleaned_data
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        # 未認証の既存ユーザがいれば削除して再登録を許可
+        User.objects.filter(email=email, is_verified=False, is_deleted=False).delete()
+        if User.objects.filter(email=email, is_deleted=False).exists():
+            raise forms.ValidationError('このメールアドレスは既に登録されています。')
+        return email
 
     def save(self, commit=True):
         user = super().save(commit=False)
-        user.set_password(self.cleaned_data['password'])
+        user.set_unusable_password()
         if commit:
             user.save()
         return user
@@ -87,3 +67,37 @@ class VerifyForm(forms.Form):
             'autofocus': True,
         }),
     )
+
+
+class ProfileForm(forms.ModelForm):
+    """プロフィール編集フォーム"""
+
+    class Meta:
+        model = User
+        fields = ['username']
+        widgets = {
+            'username': forms.TextInput(attrs={
+                'class': 'form-control',
+            }),
+        }
+
+
+class EmailChangeForm(forms.Form):
+    """メールアドレス変更フォーム"""
+    new_email = forms.EmailField(
+        label='新しいメールアドレス',
+        widget=forms.EmailInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'new-email@example.com',
+        }),
+    )
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.user = user
+
+    def clean_new_email(self):
+        email = self.cleaned_data.get('new_email')
+        if User.objects.filter(email=email, is_deleted=False).exclude(pk=self.user.pk).exists():
+            raise forms.ValidationError('このメールアドレスは既に使用されています。')
+        return email

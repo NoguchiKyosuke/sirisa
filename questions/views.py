@@ -171,6 +171,30 @@ class QuestionDeleteView(LoginRequiredMixin, View):
         return redirect('questions:my_list')
 
 
+class QuestionToggleResolveView(LoginRequiredMixin, View):
+    """質問の解決/未解決を切り替え"""
+
+    def post(self, request, pk):
+        question = get_object_or_404(Question, pk=pk, user=request.user)
+        question.is_resolved = not question.is_resolved
+        question.save(update_fields=['is_resolved'])
+        status = '解決済み' if question.is_resolved else '未解決'
+        messages.success(request, f'質問を「{status}」に変更しました。')
+
+        # htmxリクエストならバッジだけ返す
+        if getattr(request, 'htmx', False):
+            if question.is_resolved:
+                badge = '<span class="badge bg-success">解決済み</span>'
+            else:
+                badge = '<span class="badge bg-warning text-dark">未解決</span>'
+            return HttpResponse(badge)
+
+        next_url = request.POST.get('next', '')
+        if next_url:
+            return redirect(next_url)
+        return redirect('questions:my_list')
+
+
 class AnswerDeleteView(LoginRequiredMixin, View):
     """回答削除（質問者が他者の回答を削除）"""
 

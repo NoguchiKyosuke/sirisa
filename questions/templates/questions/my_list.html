@@ -40,9 +40,23 @@
                         {% endif %}
                     </td>
                     <td>
-                        <a href="{% url 'questions:edit' q.pk %}" class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-pencil"></i> 編集
-                        </a>
+                        <div class="d-flex gap-1 flex-wrap">
+                            <form method="post" action="{% url 'questions:toggle_resolve' q.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="next" value="{% url 'questions:my_list' %}">
+                                {% if q.is_resolved %}
+                                <button type="submit" class="btn btn-sm btn-outline-warning" title="未解決に戻す">
+                                    <i class="bi bi-arrow-counterclockwise"></i> 未解決に戻す
+                                </button>
+                                {% else %}
+                                <button type="submit" class="btn btn-sm btn-outline-success" title="解決済みにする">
+                                    <i class="bi bi-check-lg"></i> 解決済み
+                                </button>
+                                {% endif %}
+                            </form>
+                            <a href="{% url 'questions:edit' q.pk %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-pencil"></i>
+                            </a>
                         <button class="btn btn-sm btn-outline-danger"
                                 data-bs-toggle="modal" data-bs-target="#deleteModal{{ q.pk }}">
                             <i class="bi bi-trash"></i> 削除

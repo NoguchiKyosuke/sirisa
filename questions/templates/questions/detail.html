@@ -60,6 +60,21 @@
             <a href="{% url 'questions:answer' question.pk %}" class="btn btn-sirisa">
                 <i class="bi bi-reply"></i> 回答する
             </a>
+            {% if question.user == user %}
+            <form method="post" action="{% url 'questions:toggle_resolve' question.pk %}" class="d-inline">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'questions:detail' question.pk %}">
+                {% if question.is_resolved %}
+                <button type="submit" class="btn btn-outline-warning">
+                    <i class="bi bi-arrow-counterclockwise"></i> 未解決に戻す
+                </button>
+                {% else %}
+                <button type="submit" class="btn btn-outline-success">
+                    <i class="bi bi-check-lg"></i> 解決済みにする
+                </button>
+                {% endif %}
+            </form>
+            {% endif %}
             <a href="{% url 'questions:list' %}" class="btn btn-outline-secondary">
                 <i class="bi bi-arrow-left"></i> 質問一覧
             </a>
@@ -83,12 +98,7 @@
         {% for answer in answers %}
             {% if answer.is_ai_generated and answer.ai_generation_status == 'pending' %}
                 <!-- AI回答生成中 -->
-                <div id="ai-answer-{{ answer.pk }}"
-                     hx-get="{% url 'questions:answer_status' answer.pk %}"
-                     hx-trigger="every 5s"
-                     hx-swap="outerHTML">
-                    {% include 'questions/partials/ai_answer_loading.html' with answer=answer %}
-                </div>
+                {% include 'questions/partials/ai_answer_loading.html' with answer=answer %}
             {% else %}
                 {% include 'questions/partials/answer_card.html' with answer=answer %}
             {% endif %}
