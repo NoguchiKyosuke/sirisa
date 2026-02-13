@@ -112,11 +112,16 @@ def sanitize_ai_html(html_str, answer_id):
     
     - <style>: スコープクラスを付与し、回答内のみに影響するようにする
     - <script>: そのまま維持（除去しない）
+    - integrity属性: CDNリソースの不正ハッシュによるブロックを防ぐため除去
     - 未閉じタグ: 自動で閉じタグを追加
     """
     scope_class = f'ai-answer-{answer_id}'
+    # Geminiが出力するintegrity属性は不正値のことが多くリソースがブロックされるため除去
+    result = re.sub(r'\s+integrity=["\'][^"\']*["\']', '', html_str)
+    # crossorigin属性もintegrityなしでは不要なため除去
+    result = re.sub(r'\s+crossorigin(?:=["\'][^"\']*["\'])?', '', result)
     # <style>をスコープ（除去ではなくスコープ化のみ）
-    result = scope_style_tags(html_str, scope_class)
+    result = scope_style_tags(result, scope_class)
     # 未閉じタグを閉じる
     result = close_unclosed_tags(result)
     return result, scope_class
