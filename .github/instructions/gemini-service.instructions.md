@@ -13,7 +13,9 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 - `prompts.py` に `BASE_PROMPT` と `SUBJECT_PROMPTS` を定義
 - 教科別プロンプトで専門的な回答を生成
 - ベースプロンプト: 高校生向け、日本語、段階的説明、KaTeX数式対応
-- プロンプトで `<style>`, `<script>`, `<svg>` の使用を推奨（CSSアニメーション、SVG図形、JSインタラクション）
+- **アニメーション必須**: CSSアニメーション（@keyframes fadeSlideIn等）+ JSインタラクション（クリック展開等）を毎回含める
+- プロンプトに具体的なアニメーションコード例を記載し、Geminiが必ず実装するよう強制
+- `max_output_tokens=16384`（リッチHTML生成のため十分なトークン量を確保）
 
 ## 出力処理
 - AI回答・返信・注釈はすべてHTML形式で出力（Markdown不可）
