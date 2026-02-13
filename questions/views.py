@@ -21,7 +21,7 @@ from .models import (
 from .forms import QuestionForm, AnswerForm, ReplyForm
 from .tasks import generate_ai_answer, generate_ai_reply
 from . import export as export_module
-from .utils import render_body
+from .utils import render_body, sanitize_ai_html
 
 logger = logging.getLogger(__name__)
 
@@ -356,9 +356,12 @@ class QuestionDetailView(LoginRequiredMixin, View):
         # 各回答の本文もHTML変換し、リアクション情報を付与
         for answer in answers:
             if answer.is_ai_generated:
-                answer.rendered_body = answer.body  # AI回答は制限なし
+                sanitized, scope = sanitize_ai_html(answer.body, answer.pk)
+                answer.rendered_body = sanitized
+                answer.ai_scope_class = scope
             else:
                 answer.rendered_body = render_body(answer.body, answer.body_format)
+                answer.ai_scope_class = ''
             answer.sandbox_token = generate_token(answer.pk)
             # ユーザのリアクション種別一覧
             answer.user_reactions = [
@@ -551,9 +554,12 @@ class AnswerStatusAPIView(LoginRequiredMixin, View):
         if answer.ai_generation_status == 'completed':
             # 完了した場合、回答カードの部分テンプレートを返す
             if answer.is_ai_generated:
-                answer.rendered_body = answer.body  # AI回答は制限なし
+                sanitized, scope = sanitize_ai_html(answer.body, answer.pk)
+                answer.rendered_body = sanitized
+                answer.ai_scope_class = scope
             else:
                 answer.rendered_body = render_body(answer.body, answer.body_format)
+                answer.ai_scope_class = ''
             from content.views import generate_token
             answer.sandbox_token = generate_token(answer.pk)
             answer.user_reactions = []

@@ -20,12 +20,12 @@
         <!-- 回答本文 -->
         {% with body_len=answer.body|length %}
         {% if body_len > 500 %}
-        <div class="answer-body answer-collapsed" id="answer-body-{{ answer.pk }}" data-answer-id="{{ answer.pk }}">
+        <div class="answer-body answer-collapsed {% if answer.ai_scope_class %}{{ answer.ai_scope_class }}{% endif %}" id="answer-body-{{ answer.pk }}" data-answer-id="{{ answer.pk }}">
             {{ answer.rendered_body|safe }}
         </div>
         <button class="btn btn-link btn-sm p-0 mt-1" onclick="toggleExpand(this)">展開する</button>
         {% else %}
-        <div class="answer-body" data-answer-id="{{ answer.pk }}">
+        <div class="answer-body {% if answer.ai_scope_class %}{{ answer.ai_scope_class }}{% endif %}" data-answer-id="{{ answer.pk }}">
             {{ answer.rendered_body|safe }}
         </div>
         {% endif %}
