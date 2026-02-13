@@ -244,13 +244,20 @@ function initShadowDOM() {
         // Shadow Root参照をグローバルに保持（AI生成JSのDOM操作用）
         window['__sr' + answerId] = shadow;
 
-        // <script>タグを再作成して実行（innerHTMLでは実行されない）
-        container.querySelectorAll('script').forEach(function(oldScript) {
-            const newScript = document.createElement('script');
+        // <script>タグを再作成して実行
+        // ★ Shadow DOMに<script>を追加しても実行されない（ブラウザ仕様）
+        //    → document.head に追加して実行する
+        var scripts = Array.from(container.querySelectorAll('script'));
+        var loadNext = function(idx) {
+            if (idx >= scripts.length) return;
+            var oldScript = scripts[idx];
+            var newScript = document.createElement('script');
             if (oldScript.src) {
-                // 外部スクリプトはそのまま読み込み
+                // 外部スクリプト: onloadで順次読み込み
                 newScript.src = oldScript.src;
                 if (oldScript.type) newScript.type = oldScript.type;
+                newScript.onload = function() { loadNext(idx + 1); };
+                newScript.onerror = function() { loadNext(idx + 1); };
             } else {
                 // インラインスクリプト: document.getElement系をShadow Root経由に変換
                 var code = oldScript.textContent;
@@ -260,11 +267,14 @@ function initShadowDOM() {
                     'window.__sr' + answerId + '.querySelector(');
                 code = code.replace(/document\.querySelectorAll\s*\(/g,
                     'window.__sr' + answerId + '.querySelectorAll(');
-                newScript.textContent = code;
+                newScript.textContent = '(function(){' + code + '})();';
             }
             oldScript.remove();
-            shadow.appendChild(newScript);
-        });
+            document.head.appendChild(newScript);
+            // インラインスクリプトは同期実行なのですぐ次へ
+            if (!oldScript.src) loadNext(idx + 1);
+        };
+        loadNext(0);
 
         // KaTeX レンダリング（Shadow DOM内）
         if (typeof renderMathInElement !== 'undefined') {
