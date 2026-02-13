@@ -267,7 +267,7 @@ function initShadowDOM() {
                     'window.__sr' + answerId + '.querySelector(');
                 code = code.replace(/document\.querySelectorAll\s*\(/g,
                     'window.__sr' + answerId + '.querySelectorAll(');
-                newScript.textContent = '(function(){' + code + '})();';
+                newScript.textContent = code;
             }
             oldScript.remove();
             document.head.appendChild(newScript);
