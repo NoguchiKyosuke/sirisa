@@ -16,6 +16,9 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 - **アニメーション必須**: CSSアニメーション（@keyframes fadeSlideIn等）+ JSインタラクション（クリック展開等）を毎回含める
 - プロンプトに具体的なアニメーションコード例を記載し、Geminiが必ず実装するよう強制
 - `max_output_tokens=16384`（リッチHTML生成のため十分なトークン量を確保）
+- 質問ごとに2種類のAI回答を生成: `normal`（通常）+ `slide`（スライドプレゼン形式）
+- `SLIDE_PROMPT` でスライド形式の出力を定義（ナビゲーション付きプレゼンHTML）
+- `generate_answer()` に `style` 引数: 'normal' or 'slide' でプロンプト切替
 
 ## 出力処理
 - AI回答・返信・注釈はすべてHTML形式で出力（Markdown不可）

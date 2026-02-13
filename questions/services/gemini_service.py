@@ -73,7 +73,7 @@ def sanitize_html(html_content):
     )
 
 
-def generate_answer(question_title, question_body, subject_name, body_format='text', media_paths=None):
+def generate_answer(question_title, question_body, subject_name, body_format='text', media_paths=None, style='normal'):
     """
     Gemini APIを呼び出して回答を生成する（マルチモーダル対応）
 
@@ -82,7 +82,8 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
         question_body: 質問本文
         subject_name: 教科名
         body_format: 質問の本文フォーマット
-        media_paths: メディアファイルパスのリスト [{'path': '...', 'mime': '...'}, ...]
+        media_paths: メディアファイルパスのリスト
+        style: 'normal' または 'slide'
 
     Returns:
         サニタイズ済みのHTML回答文字列
@@ -91,7 +92,7 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
         Exception: API呼び出しに失敗した場合
     """
     import google.generativeai as genai
-    from .prompts import get_prompt_for_subject
+    from .prompts import get_prompt_for_subject, get_slide_prompt_for_subject
 
     api_key = settings.GCLOUD_API_KEY
     if not api_key or api_key == 'your-gemini-api-key-here':
@@ -99,8 +100,11 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
 
     genai.configure(api_key=api_key)
 
-    # 教科別プロンプトを取得
-    system_prompt = get_prompt_for_subject(subject_name)
+    # スタイルに応じたプロンプトを取得
+    if style == 'slide':
+        system_prompt = get_slide_prompt_for_subject(subject_name)
+    else:
+        system_prompt = get_prompt_for_subject(subject_name)
 
     # ユーザプロンプトを構成
     user_prompt_text = f"""以下の質問にHTML形式で回答してください。

@@ -447,14 +447,26 @@ function highlightSelection(annotationData, explanation, annotationId) {
     }
     if (!searchRoot) return;
 
+    // すべての出現箇所を収集してからハイライト（逆順で処理しないとオフセットがずれる）
+    const matches = [];
     const walker = document.createTreeWalker(searchRoot, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while (node = walker.nextNode()) {
-        const idx = node.textContent.indexOf(annotationData.selectedText);
-        if (idx >= 0) {
+        let startIdx = 0;
+        let idx;
+        while ((idx = node.textContent.indexOf(annotationData.selectedText, startIdx)) >= 0) {
+            matches.push({ node: node, index: idx });
+            startIdx = idx + annotationData.selectedText.length;
+        }
+    }
+
+    // 逆順で処理（後ろからラップすることでオフセットがずれない）
+    for (let i = matches.length - 1; i >= 0; i--) {
+        const m = matches[i];
+        try {
             const range = document.createRange();
-            range.setStart(node, idx);
-            range.setEnd(node, idx + annotationData.selectedText.length);
+            range.setStart(m.node, m.index);
+            range.setEnd(m.node, m.index + annotationData.selectedText.length);
             const span = document.createElement('span');
             span.className = 'ai-annotated';
             span.style.cssText = 'background:#e8d5f5;cursor:pointer;border-radius:2px;transition:background 0.2s;';
@@ -468,7 +480,6 @@ function highlightSelection(annotationData, explanation, annotationId) {
                 hideAnnotationPopup();
             });
             range.surroundContents(span);
-            // KaTeX再レンダリング
             if (typeof renderMathInElement !== 'undefined') {
                 renderMathInElement(span, {
                     delimiters: [
@@ -477,7 +488,8 @@ function highlightSelection(annotationData, explanation, annotationId) {
                     ],
                 });
             }
-            break;
+        } catch (e) {
+            // ノードが既に分割されている場合はスキップ
         }
     }
 }

@@ -56,6 +56,8 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - `sanitize_ai_html()` で前処理: 未閉じタグ自動閉じ + integrity属性除去（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
 - AI回答の `<script>` 内の `document.getElementById` 等はShadow Root経由に自動変換
 - AI回答には必ずCSSアニメーション + JSインタラクションを含める（プロンプトで強制）
+- AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）
+- 単語ホバー注釈は文章中の全出現箇所をハイライト（最初の1箇所だけでなく）
 - `max_output_tokens=16384`でリッチHTML生成に十分な余地を確保
 - ユーザ回答のHTMLは `bleach` でサニタイズ
 - ファイルアップロードは100MB制限

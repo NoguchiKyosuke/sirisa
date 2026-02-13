@@ -173,6 +173,10 @@ class Answer(TimeStampMixin, SoftDeleteMixin):
         COMPLETED = 'completed', '完了'
         FAILED = 'failed', '失敗'
 
+    class AnswerStyle(models.TextChoices):
+        NORMAL = 'normal', '通常'
+        SLIDE = 'slide', 'スライド'
+
     question = models.ForeignKey(
         Question, on_delete=models.CASCADE,
         related_name='answers',
@@ -194,6 +198,10 @@ class Answer(TimeStampMixin, SoftDeleteMixin):
     ai_generation_status = models.CharField(
         'AI生成ステータス', max_length=10,
         choices=AIStatus.choices, default=AIStatus.NONE,
+    )
+    answer_style = models.CharField(
+        '回答スタイル', max_length=10,
+        choices=AnswerStyle.choices, default=AnswerStyle.NORMAL,
     )
 
     class Meta:

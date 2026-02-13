@@ -13,7 +13,7 @@ User = get_user_model()
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
 def generate_ai_answer(self, question_id):
     """
-    質問に対してGemini AIの回答を非同期で生成する
+    質問に対してGemini AIの回答を非同期で生成する（通常 + スライドの2種類）
 
     Args:
         question_id: 質問のID
@@ -36,80 +36,80 @@ def generate_ai_answer(self, question_id):
         logger.error('Geminiシステムユーザが見つかりません')
         return
 
-    # AI回答レコードを仮作成（pending状態）
-    answer, created = Answer.objects.get_or_create(
-        question=question,
-        user=gemini_user,
-        is_ai_generated=True,
-        defaults={
-            'body': 'AI回答を生成中です...',
-            'body_format': 'html',
-            'ai_model': 'gemini-2.0-flash',
-            'ai_generation_status': 'pending',
-        }
-    )
+    # 添付メディアファイルのパスを収集（両方の回答で共通）
+    media_paths = []
+    for media in question.media_files.filter(is_deleted=False):
+        if media.media_type in ('image', 'audio', 'video') and media.file:
+            try:
+                path = media.file.path
+                ext = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
+                mime_map = {
+                    'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+                    'png': 'image/png', 'gif': 'image/gif',
+                    'webp': 'image/webp', 'svg': 'image/svg+xml',
+                    'mp3': 'audio/mpeg', 'wav': 'audio/wav',
+                    'ogg': 'audio/ogg', 'm4a': 'audio/mp4',
+                    'mp4': 'video/mp4', 'webm': 'video/webm',
+                    'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
+                }
+                mime = mime_map.get(ext, 'application/octet-stream')
+                media_paths.append({'path': path, 'mime': mime})
+                logger.info(f'メディア収集: {path} ({mime})')
+            except Exception as e:
+                logger.warning(f'メディアパス取得失敗: {media.pk} - {e}')
 
-    if not created and answer.ai_generation_status == 'completed':
-        logger.info(f'AI回答は既に生成済み: question_id={question_id}')
-        return
+    subject_name = question.display_subject
 
-    try:
-        # 添付メディアファイルのパスを収集
-        media_paths = []
-        for media in question.media_files.filter(is_deleted=False):
-            if media.media_type in ('image', 'audio', 'video') and media.file:
-                try:
-                    path = media.file.path
-                    ext = path.rsplit('.', 1)[-1].lower() if '.' in path else ''
-                    mime_map = {
-                        'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
-                        'png': 'image/png', 'gif': 'image/gif',
-                        'webp': 'image/webp', 'svg': 'image/svg+xml',
-                        'mp3': 'audio/mpeg', 'wav': 'audio/wav',
-                        'ogg': 'audio/ogg', 'm4a': 'audio/mp4',
-                        'mp4': 'video/mp4', 'webm': 'video/webm',
-                        'mov': 'video/quicktime', 'avi': 'video/x-msvideo',
-                    }
-                    mime = mime_map.get(ext, 'application/octet-stream')
-                    media_paths.append({'path': path, 'mime': mime})
-                    logger.info(f'メディア収集: {path} ({mime})')
-                except Exception as e:
-                    logger.warning(f'メディアパス取得失敗: {media.pk} - {e}')
-
-        # Gemini APIを呼び出して回答を生成
-        subject_name = question.display_subject
-        html_answer = generate_answer(
-            question_title=question.title,
-            question_body=question.body,
-            subject_name=subject_name,
-            body_format=question.body_format,
-            media_paths=media_paths if media_paths else None,
+    # 2種類の回答を生成: normal と slide
+    for style in ('normal', 'slide'):
+        answer, created = Answer.objects.get_or_create(
+            question=question,
+            user=gemini_user,
+            is_ai_generated=True,
+            answer_style=style,
+            defaults={
+                'body': 'AI回答を生成中です...',
+                'body_format': 'html',
+                'ai_model': 'gemini-2.0-flash',
+                'ai_generation_status': 'pending',
+            }
         )
 
-        # 回答を更新
-        answer.body = html_answer
-        answer.ai_generation_status = 'completed'
-        answer.save(update_fields=['body', 'ai_generation_status', 'updated_at'])
+        if not created and answer.ai_generation_status == 'completed':
+            logger.info(f'AI回答({style})は既に生成済み: question_id={question_id}')
+            continue
 
-        logger.info(f'AI回答生成成功: question_id={question_id}')
-
-    except Exception as exc:
-        logger.error(f'AI回答生成失敗: question_id={question_id} - {exc}')
-
-        if self.request.retries < self.max_retries:
-            logger.info(f'リトライ {self.request.retries + 1}/{self.max_retries}')
-            raise self.retry(exc=exc)
-        else:
-            # 全リトライ失敗
-            answer.body = (
-                '<div class="alert alert-warning">'
-                '<strong>AI回答の生成に失敗しました。</strong><br>'
-                '教師からの回答をお待ちください。'
-                '</div>'
+        try:
+            html_answer = generate_answer(
+                question_title=question.title,
+                question_body=question.body,
+                subject_name=subject_name,
+                body_format=question.body_format,
+                media_paths=media_paths if media_paths else None,
+                style=style,
             )
-            answer.ai_generation_status = 'failed'
+
+            answer.body = html_answer
+            answer.ai_generation_status = 'completed'
             answer.save(update_fields=['body', 'ai_generation_status', 'updated_at'])
-            logger.error(f'AI回答生成: 全リトライ失敗 question_id={question_id}')
+            logger.info(f'AI回答({style})生成成功: question_id={question_id}')
+
+        except Exception as exc:
+            logger.error(f'AI回答({style})生成失敗: question_id={question_id} - {exc}')
+
+            if self.request.retries < self.max_retries:
+                logger.info(f'リトライ {self.request.retries + 1}/{self.max_retries}')
+                raise self.retry(exc=exc)
+            else:
+                answer.body = (
+                    '<div class="alert alert-warning">'
+                    '<strong>AI回答の生成に失敗しました。</strong><br>'
+                    '教師からの回答をお待ちください。'
+                    '</div>'
+                )
+                answer.ai_generation_status = 'failed'
+                answer.save(update_fields=['body', 'ai_generation_status', 'updated_at'])
+                logger.error(f'AI回答({style}): 全リトライ失敗 question_id={question_id}')
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=5)
