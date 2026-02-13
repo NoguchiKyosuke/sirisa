@@ -14,7 +14,9 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 - 教科別プロンプトで専門的な回答を生成
 - ベースプロンプト: 高校生向け、日本語、段階的説明、KaTeX数式対応
 - **アニメーション必須**: CSSアニメーション（@keyframes fadeSlideIn等）+ JSインタラクション（クリック展開等）を毎回含める
-- プロンプトに具体的なアニメーションコード例を記載し、Geminiが必ず実装するよう強制
+- **図・グラフ必須**: SVG、Chart.js、Mermaid.js等を使い最低1つの図・グラフ・ダイアグラムを含める
+- プロンプトに具体的なアニメーション・図表コード例を記載し、Geminiが必ず実装するよう強制
+- 使い分け: 数学グラフ→SVG, 統計データ→Chart.js, フロー→Mermaid.js, タイムライン→CSS+SVG
 - `max_output_tokens=16384`（リッチHTML生成のため十分なトークン量を確保）
 - 質問ごとに2種類のAI回答を生成: `normal`（通常）+ `slide`（スライドプレゼン形式）
 - `SLIDE_PROMPT` でスライド形式の出力を定義（ナビゲーション付きプレゼンHTML）

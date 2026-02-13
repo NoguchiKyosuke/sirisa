@@ -55,7 +55,8 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - AI回答はShadow DOM内に表示（CSS/JSがページ全体に影響しない）
 - `sanitize_ai_html()` で前処理: 未閉じタグ自動閉じ + integrity属性除去（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
 - AI回答の `<script>` 内の `document.getElementById` 等はShadow Root経由に自動変換
-- AI回答には必ずCSSアニメーション + JSインタラクションを含める（プロンプトで強制）
+- AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
+- 図表はSVG、Chart.js、Mermaid.js、CSSのみの4方式を教科に応じて使い分け
 - AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）
 - 単語ホバー注釈は文章中の全出現箇所をハイライト（最初の1箇所だけでなく）
 - 注釈ポップアップはトリガー要素またはポップアップ上にカーソルがある間は表示維持、他の場所に触れると消える

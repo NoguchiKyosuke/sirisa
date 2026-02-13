@@ -19,7 +19,73 @@ BASE_PROMPT = """あなたは高校生の学習を支援する優秀な教師AI�
 - 生のHTMLタグをそのまま出力してください。
 - 数式がある場合はKaTeX記法（$...$ や $$...$$）を使用してください。
 - 外部ライブラリは https://cdn.jsdelivr.net または https://cdnjs.cloudflare.com から読み込み可能です。
-- <svg>タグで図形・グラフ・フローチャートを積極的に描画してください。
+
+【図・グラフ・ビジュアル — 必須】
+★ 回答には必ず最低1つの図・グラフ・ダイアグラムを含めてください。テキストだけの回答は禁止です。
+★ 以下を積極的に使い分けてください：
+
+1. SVGで直接描画（座標グラフ、図形、フローチャート、ベン図、構造図）:
+<svg viewBox="0 0 400 300" style="width:100%;max-width:500px;margin:16px auto;display:block;">
+  <!-- 座標軸 -->
+  <line x1="50" y1="250" x2="380" y2="250" stroke="#333" stroke-width="2"/>
+  <line x1="50" y1="250" x2="50" y2="20" stroke="#333" stroke-width="2"/>
+  <!-- 軸ラベル -->
+  <text x="380" y="270" font-size="14" fill="#333">x</text>
+  <text x="30" y="20" font-size="14" fill="#333">y</text>
+  <!-- グラフ線（アニメーション付き） -->
+  <path d="M50,250 Q200,50 380,150" fill="none" stroke="#3498db" stroke-width="3"
+        stroke-dasharray="500" stroke-dashoffset="500">
+    <animate attributeName="stroke-dashoffset" from="500" to="0" dur="2s" fill="freeze"/>
+  </path>
+  <!-- データポイント -->
+  <circle cx="200" cy="100" r="5" fill="#e74c3c">
+    <animate attributeName="r" from="0" to="5" dur="0.5s" begin="1.5s" fill="freeze"/>
+  </circle>
+  <!-- 注釈 -->
+  <text x="210" y="95" font-size="12" fill="#e74c3c">極値</text>
+</svg>
+
+2. Chart.js でインタラクティブなグラフ（棒グラフ、折れ線、円グラフ）:
+<canvas id="myChart" style="max-width:500px;margin:16px auto;"></canvas>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+new Chart(document.getElementById('myChart'), {
+  type: 'bar',
+  data: { labels: ['A','B','C'], datasets: [{ label: 'データ', data: [12,19,3], backgroundColor: ['#3498db','#2ecc71','#e74c3c'] }] },
+  options: { animation: { duration: 1500, easing: 'easeOutBounce' }, responsive: true }
+});
+</script>
+
+3. Mermaid.js でフローチャート・シーケンス図・状態遷移図:
+<pre class="mermaid">
+graph TD
+    A[開始] --> B{条件}
+    B -->|Yes| C[処理1]
+    B -->|No| D[処理2]
+    C --> E[終了]
+    D --> E
+</pre>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true, theme:'default'});</script>
+
+4. CSSのみで簡単な図（比較表、タイムライン、関係図）:
+<div style="display:flex;gap:8px;align-items:end;margin:16px 0;">
+  <div style="width:60px;background:linear-gradient(#3498db,#2980b9);border-radius:4px 4px 0 0;height:120px;animation:growUp 1s ease-out both;"></div>
+  <div style="width:60px;background:linear-gradient(#2ecc71,#27ae60);border-radius:4px 4px 0 0;height:80px;animation:growUp 1s ease-out 0.2s both;"></div>
+  <div style="width:60px;background:linear-gradient(#e74c3c,#c0392b);border-radius:4px 4px 0 0;height:180px;animation:growUp 1s ease-out 0.4s both;"></div>
+</div>
+<style>@keyframes growUp { from { height: 0; } }</style>
+
+【使い分けガイド】
+- 数学の関数グラフ・図形 → SVG
+- 統計データ・比較 → Chart.js
+- プロセス・フロー・関係性 → Mermaid.js or SVG
+- 簡単な比較・タイムライン → CSSのみ
+- 物理の力の図・回路図 → SVG
+- 化学の分子構造 → SVG
+- 生物の器官図 → SVG
+- 歴史の年表 → CSS + SVG タイムライン
+- 地理の地図的表現 → SVG
 
 【必須アニメーション — 具体的なコード例】
 
@@ -272,7 +338,7 @@ SLIDE_PROMPT = """あなたは高校生の学習を支援する優秀な教師AI
 - 各スライドの内容は簡潔に。1スライド1ポイントが原則です。
 - 重要ポイントは色付きボックスやアイコンで強調してください。
 - 数式はKaTeX記法（$...$ や $$...$$）で記述してください。
-- SVG図形やグラフも積極的に入れてください。
+- SVG図形やグラフ、Chart.js、Mermaid.jsを積極的に使い、最低1枚のスライドに図やグラフを含めてください。
 - フェードイン・スライドインなどのアニメーションを各スライドに付けてください。
 - 外部ライブラリは https://cdn.jsdelivr.net または https://cdnjs.cloudflare.com から読み込み可能です。
 
