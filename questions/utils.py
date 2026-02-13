@@ -108,13 +108,15 @@ def scope_style_tags(html_str, scope_class):
 
 
 def sanitize_ai_html(html_str, answer_id):
-    """AI回答HTMLをページ内表示用に安全にする（タグ閉じ+スタイルスコープ）"""
-    # <script>タグを除去（ページ全体に影響するため）
-    result = re.sub(r'<script[^>]*>.*?</script>', '', html_str,
-                    flags=re.DOTALL | re.IGNORECASE)
-    # <style>をスコープ
+    """AI回答HTMLをページ内表示用に安全にする（タグ閉じ+スタイルスコープ）
+    
+    - <style>: スコープクラスを付与し、回答内のみに影響するようにする
+    - <script>: そのまま維持（除去しない）
+    - 未閉じタグ: 自動で閉じタグを追加
+    """
     scope_class = f'ai-answer-{answer_id}'
-    result = scope_style_tags(result, scope_class)
+    # <style>をスコープ（除去ではなくスコープ化のみ）
+    result = scope_style_tags(html_str, scope_class)
     # 未閉じタグを閉じる
     result = close_unclosed_tags(result)
     return result, scope_class
