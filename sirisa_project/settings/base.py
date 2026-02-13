@@ -35,6 +35,9 @@ INSTALLED_APPS = [
     'core.apps.CoreConfig',
     'accounts.apps.AccountsConfig',
     'questions.apps.QuestionsConfig',
+    'groups.apps.GroupsConfig',
+    'pages.apps.PagesConfig',
+    'content.apps.ContentConfig',
 ]
 
 MIDDLEWARE = [
@@ -130,8 +133,8 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Asia/Tokyo'
 
-# Gemini API
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+# Google Cloud API (Gemini / Safe Browsing 等)
+GCLOUD_API_KEY = os.getenv('GCLOUD_API_KEY', '')
 
 # Gmail SMTP
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'

@@ -2,6 +2,47 @@
 {% load static %}
 {% block title %}{{ question.title }}{% endblock %}
 
+{% block extra_css %}
+<style>
+.annotation-popup {
+    position: fixed;
+    z-index: 1050;
+    max-width: 400px;
+    background: var(--bs-body-bg, white);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    padding: 16px;
+    font-size: 0.9rem;
+    display: none;
+}
+.annotation-popup .close-btn {
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--bs-secondary-color);
+}
+.ai-ask-btn {
+    position: fixed;
+    z-index: 1049;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    display: none;
+}
+.ai-ask-btn:hover {
+    opacity: 0.9;
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-lg-9">
@@ -20,6 +61,9 @@
                         <span class="badge bg-success ms-1">解決済み</span>
                         {% else %}
                         <span class="badge bg-warning text-dark ms-1">未解決</span>
+                        {% endif %}
+                        {% if question.visibility == 'group' and question.group %}
+                        <span class="badge bg-primary ms-1"><i class="bi bi-people-fill"></i> {{ question.group.name }}</span>
                         {% endif %}
                     </div>
                 </div>
@@ -100,7 +144,7 @@
                 <!-- AI回答生成中 -->
                 {% include 'questions/partials/ai_answer_loading.html' with answer=answer %}
             {% else %}
-                {% include 'questions/partials/answer_card.html' with answer=answer %}
+                {% include 'questions/partials/answer_card.html' with answer=answer content_domain=content_domain %}
             {% endif %}
         {% empty %}
         <div class="text-center py-4 text-muted">
@@ -110,11 +154,22 @@
         {% endfor %}
     </div>
 </div>
+
+<!-- AI注釈ポップアップ -->
+<div class="annotation-popup" id="annotationPopup">
+    <span class="close-btn" onclick="hideAnnotationPopup()">&times;</span>
+    <div id="annotationContent"></div>
+</div>
+
+<!-- テキスト選択時のAI質問ボタン -->
+<button class="ai-ask-btn" id="aiAskBtn" onclick="askAIAboutSelection()">
+    <i class="bi bi-robot"></i> AIに意味を聞く
+</button>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// リアクション切替
+// ===== リアクション切替 =====
 function toggleReaction(answerId, emojiType, btn) {
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value
         || '{{ csrf_token }}';
@@ -129,9 +184,7 @@ function toggleReaction(answerId, emojiType, btn) {
     })
     .then(r => r.json())
     .then(data => {
-        // ボタンの状態を更新
         btn.classList.toggle('active', data.active);
-        // カウントを更新
         const container = btn.closest('.reaction-container');
         Object.entries(data.counts).forEach(([emoji, count]) => {
             const countEl = container.querySelector(`[data-count="${emoji}"]`);
@@ -140,11 +193,217 @@ function toggleReaction(answerId, emojiType, btn) {
     });
 }
 
-// 長い回答の展開/折りたたみ
+// ===== 長い回答の展開/折りたたみ =====
 function toggleExpand(btn) {
     const body = btn.previousElementSibling;
     body.classList.toggle('answer-collapsed');
     btn.textContent = body.classList.contains('answer-collapsed') ? '展開する' : '折りたたむ';
+}
+
+// ===== サンドボックスiframe高さ自動調整 =====
+window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'resize' && e.data.answerId) {
+        const iframe = document.getElementById('sandbox-' + e.data.answerId);
+        if (iframe) {
+            iframe.style.height = (e.data.height + 20) + 'px';
+        }
+    }
+});
+
+// ダークモード変更をiframeに伝播
+function syncThemeToIframes() {
+    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+    document.querySelectorAll('iframe[id^="sandbox-"]').forEach(function(iframe) {
+        try {
+            iframe.contentWindow.postMessage({ type: 'theme', dark: isDark }, '*');
+        } catch(e) {}
+    });
+}
+// 初回同期
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(syncThemeToIframes, 1000);
+});
+// テーマ変更時
+const origToggle = window.toggleDarkMode;
+window.toggleDarkMode = function() {
+    origToggle();
+    setTimeout(syncThemeToIframes, 100);
+};
+
+// ===== AI注釈機能 =====
+const csrfToken = '{{ csrf_token }}';
+let selectedAnnotationData = null;
+
+// テキスト選択時の「AIに意味を聞く」ボタン
+document.addEventListener('mouseup', function(e) {
+    const aiBtn = document.getElementById('aiAskBtn');
+    const sel = window.getSelection();
+    const text = sel.toString().trim();
+
+    // 回答本文内の選択のみ対象
+    if (text.length < 2 || text.length > 500) {
+        aiBtn.style.display = 'none';
+        return;
+    }
+
+    const anchorNode = sel.anchorNode;
+    const answerBody = anchorNode ? anchorNode.parentElement?.closest('.answer-body') : null;
+    if (!answerBody) {
+        aiBtn.style.display = 'none';
+        return;
+    }
+
+    const answerId = answerBody.dataset.answerId;
+    if (!answerId) {
+        aiBtn.style.display = 'none';
+        return;
+    }
+
+    // ボタン位置を選択位置近くに
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    aiBtn.style.left = (rect.left + rect.width / 2 - 60) + 'px';
+    aiBtn.style.top = (rect.top - 40 + window.scrollY) + 'px';
+    aiBtn.style.display = 'block';
+
+    selectedAnnotationData = {
+        answerId: answerId,
+        selectedText: text,
+        contextBefore: '',
+        contextAfter: '',
+    };
+});
+
+// ポップアップ外クリックで非表示
+document.addEventListener('mousedown', function(e) {
+    const aiBtn = document.getElementById('aiAskBtn');
+    const popup = document.getElementById('annotationPopup');
+    if (!aiBtn.contains(e.target) && !popup.contains(e.target)) {
+        aiBtn.style.display = 'none';
+    }
+});
+
+function askAIAboutSelection() {
+    if (!selectedAnnotationData) return;
+    const aiBtn = document.getElementById('aiAskBtn');
+    aiBtn.style.display = 'none';
+
+    showAnnotationPopup(
+        '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> AIが解説を生成中...</div>',
+        aiBtn.style.left, aiBtn.style.top
+    );
+
+    fetch('{% url "questions:annotation_create" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+            answer_id: selectedAnnotationData.answerId,
+            selected_text: selectedAnnotationData.selectedText,
+            type: 'word',
+            context_before: selectedAnnotationData.contextBefore,
+            context_after: selectedAnnotationData.contextAfter,
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.explanation) {
+            showAnnotationPopup(renderMarkdown(data.explanation));
+        } else if (data.error) {
+            showAnnotationPopup('<div class="text-danger">' + data.error + '</div>');
+        }
+    })
+    .catch(err => {
+        showAnnotationPopup('<div class="text-danger">エラーが発生しました</div>');
+    });
+}
+
+// 数式クリックで導出を表示
+document.addEventListener('click', function(e) {
+    const katexEl = e.target.closest('.katex');
+    if (!katexEl) return;
+
+    const answerBody = katexEl.closest('.answer-body');
+    if (!answerBody) return;
+
+    const answerId = answerBody.dataset.answerId;
+    if (!answerId) return;
+
+    // KaTeX要素のテキストを取得
+    const formulaText = katexEl.textContent.trim();
+    if (!formulaText) return;
+
+    const rect = katexEl.getBoundingClientRect();
+    showAnnotationPopup(
+        '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> 数式の導出を生成中...</div>',
+        rect.left + 'px', (rect.bottom + window.scrollY + 8) + 'px'
+    );
+
+    fetch('{% url "questions:annotation_create" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken,
+        },
+        body: JSON.stringify({
+            answer_id: answerId,
+            selected_text: formulaText,
+            type: 'formula',
+            context_before: '',
+            context_after: '',
+        }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.explanation) {
+            showAnnotationPopup(renderMarkdown(data.explanation));
+        } else if (data.error) {
+            showAnnotationPopup('<div class="text-danger">' + data.error + '</div>');
+        }
+    })
+    .catch(err => {
+        showAnnotationPopup('<div class="text-danger">エラーが発生しました</div>');
+    });
+});
+
+function showAnnotationPopup(html, left, top) {
+    const popup = document.getElementById('annotationPopup');
+    const content = document.getElementById('annotationContent');
+    content.innerHTML = html;
+    popup.style.display = 'block';
+    if (left) popup.style.left = left;
+    if (top) popup.style.top = top;
+    // KaTeX再レンダリング
+    if (typeof renderMathInElement !== 'undefined') {
+        renderMathInElement(content, {
+            delimiters: [
+                {left: '$$', right: '$$', display: true},
+                {left: '$', right: '$', display: false},
+            ],
+        });
+    }
+    // ポップアップが画面外に出ないよう調整
+    const rect = popup.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        popup.style.left = (window.innerWidth - rect.width - 16) + 'px';
+    }
+    if (rect.left < 0) popup.style.left = '16px';
+}
+
+function hideAnnotationPopup() {
+    document.getElementById('annotationPopup').style.display = 'none';
+}
+
+// 簡易マークダウンレンダリング
+function renderMarkdown(text) {
+    return text
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/`(.*?)`/g, '<code>$1</code>')
+        .replace(/\n/g, '<br>');
 }
 </script>
 {% endblock %}

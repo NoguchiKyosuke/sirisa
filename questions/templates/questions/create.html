@@ -53,6 +53,37 @@
                     <div class="form-text">画像、音声、動画ファイルを添付できます（合計100MBまで）</div>
                 </div>
 
+                <!-- 公開範囲 -->
+                <div class="mb-3">
+                    <label class="form-label fw-bold">公開範囲</label>
+                    <div class="d-flex gap-3">
+                        <div class="form-check">
+                            <input type="radio" name="visibility" value="public" class="form-check-input" id="vis_public"
+                                   {% if form.visibility.value != 'group' %}checked{% endif %}
+                                   onchange="toggleGroupSelect()">
+                            <label class="form-check-label" for="vis_public">全体公開</label>
+                        </div>
+                        {% if form.user_groups %}
+                        <div class="form-check">
+                            <input type="radio" name="visibility" value="group" class="form-check-input" id="vis_group"
+                                   {% if form.visibility.value == 'group' %}checked{% endif %}
+                                   onchange="toggleGroupSelect()">
+                            <label class="form-check-label" for="vis_group">グループ内</label>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% if form.user_groups %}
+                    <div id="groupSelectWrapper" class="mt-2" style="display:{% if form.visibility.value == 'group' %}block{% else %}none{% endif %};">
+                        <select name="group" class="form-select" id="id_group">
+                            <option value="">グループを選択...</option>
+                            {% for gid, gname in form.user_groups %}
+                            <option value="{{ gid }}" {% if form.group.value|stringformat:"s" == gid|stringformat:"s" %}selected{% endif %}>{{ gname }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% endif %}
+                </div>
+
                 <div class="d-flex justify-content-between align-items-center">
                     <span class="auto-save-indicator" id="autoSaveStatus"></span>
                     <div>
@@ -70,6 +101,15 @@
 
 {% block extra_js %}
 <script>
+// 公開範囲切替
+function toggleGroupSelect() {
+    const groupWrapper = document.getElementById('groupSelectWrapper');
+    const isGroup = document.getElementById('vis_group')?.checked;
+    if (groupWrapper) {
+        groupWrapper.style.display = isGroup ? 'block' : 'none';
+    }
+}
+
 // 「その他」選択時にカスタム教科入力欄を表示
 document.getElementById('id_subject').addEventListener('change', function() {
     const customField = document.getElementById('id_custom_subject');

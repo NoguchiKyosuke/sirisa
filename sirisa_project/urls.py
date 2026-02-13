@@ -10,6 +10,9 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('accounts.urls')),
     path('questions/', include('questions.urls', namespace='questions')),
+    path('groups/', include('groups.urls', namespace='groups')),
+    path('pages/', include('pages.urls', namespace='pages')),
+    path('content/', include('content.urls', namespace='content')),
     path('', include('questions.urls_home')),
 ]
 

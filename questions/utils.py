@@ -11,6 +11,9 @@ ALLOWED_TAGS = list(bleach.ALLOWED_TAGS) + [
     'pre', 'code', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
     'ul', 'ol', 'li', 'hr', 'br', 'blockquote', 'strong', 'em',
     'div', 'span', 'sup', 'sub', 'dl', 'dt', 'dd',
+    'mark', 'small', 'abbr', 'details', 'summary',
+    'figure', 'figcaption', 'caption', 'colgroup', 'col',
+    'b', 'i',
 ]
 
 ALLOWED_ATTRIBUTES = {
@@ -23,8 +26,10 @@ ALLOWED_ATTRIBUTES = {
 ALLOWED_ATTRIBUTES_HTML = {
     '*': ['class', 'style'],
     'a': ['href', 'title'],
-    'th': ['colspan', 'rowspan'],
+    'th': ['colspan', 'rowspan', 'scope'],
     'td': ['colspan', 'rowspan'],
+    'col': ['span'],
+    'abbr': ['title'],
 }
 
 

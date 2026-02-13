@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}グループ一覧{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-9">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3><i class="bi bi-people"></i> グループ</h3>
+            <a href="{% url 'groups:create' %}" class="btn btn-sirisa">
+                <i class="bi bi-plus-lg"></i> 新規作成
+            </a>
+        </div>
+
+        <!-- 招待コードで参加 -->
+        <div class="card p-3 mb-4">
+            <h6 class="mb-2"><i class="bi bi-ticket-perforated"></i> 招待コードで参加</h6>
+            <form method="post" action="{% url 'groups:join' %}" class="d-flex gap-2">
+                {% csrf_token %}
+                {{ invite_form.invite_code }}
+                <button type="submit" class="btn btn-sirisa">参加</button>
+            </form>
+        </div>
+
+        {% if memberships %}
+        <div class="row g-3">
+            {% for m in memberships %}
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="card-title mb-1">
+                                <a href="{% url 'groups:detail' m.group.pk %}" class="text-decoration-none">
+                                    {{ m.group.name }}
+                                </a>
+                            </h5>
+                            {% if m.role == 'owner' %}
+                            <span class="badge bg-warning text-dark">オーナー</span>
+                            {% else %}
+                            <span class="badge bg-info">メンバー</span>
+                            {% endif %}
+                        </div>
+                        {% if m.group.description %}
+                        <p class="card-text small text-muted">{{ m.group.description|truncatechars:80 }}</p>
+                        {% endif %}
+                        <div class="text-muted small">
+                            <i class="bi bi-people"></i> {{ m.group.memberships.count }}人
+                            <span class="mx-1">|</span>
+                            <i class="bi bi-person-badge"></i> {{ m.group.owner.username }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-people text-muted" style="font-size: 3rem;"></i>
+            <p class="text-muted mt-3">まだグループに参加していません。</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

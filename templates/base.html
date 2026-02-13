@@ -97,6 +97,11 @@
                             <i class="bi bi-search"></i> 質問を探す
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'groups:list' %}">
+                            <i class="bi bi-people"></i> グループ
+                        </a>
+                    </li>
                 </ul>
                 <ul class="navbar-nav">
                     <li class="nav-item">
@@ -144,6 +149,13 @@
     <!-- フッター -->
     <footer class="py-3 mt-auto">
         <div class="container text-center">
+            <div class="mb-2">
+                <a href="{% url 'pages:how_to_use' %}" class="text-light text-decoration-none small me-3">使い方</a>
+                <a href="{% url 'pages:faq' %}" class="text-light text-decoration-none small me-3">FAQ</a>
+                <a href="{% url 'pages:contact' %}" class="text-light text-decoration-none small me-3">お問い合わせ</a>
+                <a href="{% url 'pages:terms' %}" class="text-light text-decoration-none small me-3">利用規約</a>
+                <a href="{% url 'pages:privacy' %}" class="text-light text-decoration-none small">プライバシーポリシー</a>
+            </div>
             <small>&copy; 2026 SIRISA - 学習補助プラットフォーム</small>
         </div>
     </footer>

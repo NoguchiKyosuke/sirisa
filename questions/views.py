@@ -16,9 +16,10 @@ import bleach
 from .models import (
     Question, QuestionMedia, Answer, AnswerMedia,
     Reaction, Subject, QuestionDraft, AnswerDraft,
+    Reply, AIAnnotation,
 )
-from .forms import QuestionForm, AnswerForm
-from .tasks import generate_ai_answer
+from .forms import QuestionForm, AnswerForm, ReplyForm
+from .tasks import generate_ai_answer, generate_ai_reply
 from . import export as export_module
 from .utils import render_body
 
@@ -32,8 +33,18 @@ class HomeView(LoginRequiredMixin, View):
     """ホーム画面"""
 
     def get(self, request):
+        from groups.models import GroupMembership
+        user_group_ids = list(
+            GroupMembership.objects.filter(user=request.user)
+            .values_list('group_id', flat=True)
+        )
+
         recent_questions = Question.objects.select_related(
             'user', 'subject'
+        ).filter(
+            Q(visibility='public') |
+            Q(visibility='group', group_id__in=user_group_ids) |
+            Q(user=request.user)
         ).order_by('-created_at')[:5]
         return render(request, 'questions/home.html', {
             'recent_questions': recent_questions,
@@ -44,13 +55,13 @@ class QuestionCreateView(LoginRequiredMixin, View):
     """質問投稿画面"""
 
     def get(self, request):
-        form = QuestionForm()
+        form = QuestionForm(user=request.user)
         # 既存の下書きを読み込み
         draft = QuestionDraft.objects.filter(
             user=request.user, question__isnull=True
         ).order_by('-auto_saved_at').first()
         if draft:
-            form = QuestionForm(initial={
+            form = QuestionForm(user=request.user, initial={
                 'title': draft.title,
                 'subject': draft.subject_id,
                 'custom_subject': draft.custom_subject,
@@ -60,10 +71,31 @@ class QuestionCreateView(LoginRequiredMixin, View):
         return render(request, 'questions/create.html', {'form': form})
 
     def post(self, request):
-        form = QuestionForm(request.POST)
+        form = QuestionForm(request.POST, user=request.user)
         if form.is_valid():
             question = form.save(commit=False)
             question.user = request.user
+
+            # グループ共有
+            visibility = form.cleaned_data.get('visibility', 'public')
+            question.visibility = visibility
+            if visibility == 'group':
+                group_id = request.POST.get('group')
+                if group_id:
+                    from groups.models import StudyGroup, GroupMembership
+                    try:
+                        group = StudyGroup.objects.get(pk=group_id, is_active=True)
+                        # メンバーチェック
+                        if GroupMembership.objects.filter(group=group, user=request.user).exists():
+                            question.group = group
+                        else:
+                            messages.error(request, 'このグループのメンバーではありません。')
+                            return render(request, 'questions/create.html', {'form': form})
+                    except StudyGroup.DoesNotExist:
+                        question.visibility = 'public'
+                else:
+                    question.visibility = 'public'
+
             question.save()
 
             # メディアファイル保存
@@ -218,7 +250,18 @@ class QuestionListView(LoginRequiredMixin, View):
     """質問一覧・検索画面"""
 
     def get(self, request):
-        questions = Question.objects.select_related('user', 'subject')
+        # 公開質問 + 自分が所属するグループの質問
+        from groups.models import GroupMembership
+        user_group_ids = list(
+            GroupMembership.objects.filter(user=request.user)
+            .values_list('group_id', flat=True)
+        )
+
+        questions = Question.objects.select_related('user', 'subject', 'group').filter(
+            Q(visibility='public') |
+            Q(visibility='group', group_id__in=user_group_ids) |
+            Q(user=request.user)
+        )
 
         # 絞り込み
         subject_id = request.GET.get('subject')
@@ -268,8 +311,18 @@ class QuestionDetailView(LoginRequiredMixin, View):
 
     def get(self, request, pk):
         question = get_object_or_404(
-            Question.objects.select_related('user', 'subject'), pk=pk
+            Question.objects.select_related('user', 'subject', 'group'), pk=pk
         )
+
+        # グループ質問の場合、メンバーチェック
+        if question.visibility == 'group' and question.group:
+            from groups.models import GroupMembership
+            if not GroupMembership.objects.filter(
+                group=question.group, user=request.user
+            ).exists() and question.user != request.user:
+                messages.error(request, 'この質問は閲覧権限がありません。')
+                return redirect('questions:list')
+
         media_files = question.media_files.filter(is_deleted=False)
 
         # 回答一覧（リアクションスコア順にソート）
@@ -297,9 +350,13 @@ class QuestionDetailView(LoginRequiredMixin, View):
         # 質問本文のHTML変換
         rendered_body = render_body(question.body, question.body_format)
 
+        # サンドボックストークン生成
+        from content.views import generate_token
+
         # 各回答の本文もHTML変換し、リアクション情報を付与
         for answer in answers:
             answer.rendered_body = render_body(answer.body, answer.body_format)
+            answer.sandbox_token = generate_token(answer.pk)
             # ユーザのリアクション種別一覧
             answer.user_reactions = [
                 r.emoji_type for r in Reaction.objects.filter(
@@ -315,6 +372,12 @@ class QuestionDetailView(LoginRequiredMixin, View):
             answer.heart_count = reaction_counts.get('heart', 0) or ''
             answer.celebration_count = reaction_counts.get('celebration', 0) or ''
             answer.idea_count = reaction_counts.get('idea', 0) or ''
+            # 返信一覧
+            answer.reply_list = answer.replies.filter(is_deleted=False).select_related('user')
+            # 注釈一覧
+            answer.annotation_list = answer.annotations.filter(
+                created_by=request.user
+            )
 
         context = {
             'question': question,
@@ -322,6 +385,8 @@ class QuestionDetailView(LoginRequiredMixin, View):
             'answers': answers,
             'user_reactions': user_reactions,
             'rendered_body': rendered_body,
+            'reply_form': ReplyForm(),
+            'content_domain': 'content.sirisa.net',
         }
         return render(request, 'questions/detail.html', context)
 
@@ -482,18 +547,37 @@ class AnswerStatusAPIView(LoginRequiredMixin, View):
 
         if answer.ai_generation_status == 'completed':
             # 完了した場合、回答カードの部分テンプレートを返す
-            rendered_body = render_body(answer.body, answer.body_format)
+            answer.rendered_body = render_body(answer.body, answer.body_format)
+            from content.views import generate_token
+            answer.sandbox_token = generate_token(answer.pk)
+            answer.user_reactions = []
+            if request.user.is_authenticated:
+                answer.user_reactions = list(
+                    answer.reactions.filter(user=request.user).values_list('emoji_type', flat=True)
+                )
+            # リアクションカウント
+            from django.db.models import Count
+            reaction_counts = {}
+            for r in answer.reactions.values('emoji_type').annotate(cnt=Count('id')):
+                reaction_counts[r['emoji_type']] = r['cnt']
+            answer.thumbs_up_count = reaction_counts.get('thumbs_up', 0) or ''
+            answer.thumbs_down_count = reaction_counts.get('thumbs_down', 0) or ''
+            answer.heart_count = reaction_counts.get('heart', 0) or ''
+            answer.celebration_count = reaction_counts.get('celebration', 0) or ''
+            answer.idea_count = reaction_counts.get('idea', 0) or ''
             return render(request, 'questions/partials/answer_card.html', {
                 'answer': answer,
-                'rendered_body': rendered_body,
-                'is_polling': False,
             })
         elif answer.ai_generation_status == 'failed':
-            rendered_body = answer.body  # フォールバックメッセージ（既にHTML）
+            answer.rendered_body = answer.body
+            answer.user_reactions = []
+            answer.thumbs_up_count = ''
+            answer.thumbs_down_count = ''
+            answer.heart_count = ''
+            answer.celebration_count = ''
+            answer.idea_count = ''
             return render(request, 'questions/partials/answer_card.html', {
                 'answer': answer,
-                'rendered_body': rendered_body,
-                'is_polling': False,
             })
         else:
             # まだ生成中
@@ -526,3 +610,160 @@ class QuestionExportView(LoginRequiredMixin, View):
             return redirect('questions:detail', pk=pk)
 
         return exporter(question, answers)
+
+
+# ===== 返信機能 =====
+
+class ReplyCreateView(LoginRequiredMixin, View):
+    """回答への返信投稿"""
+
+    def post(self, request, pk):
+        answer = get_object_or_404(Answer, pk=pk, is_deleted=False)
+        form = ReplyForm(request.POST)
+        if form.is_valid():
+            body = form.cleaned_data['body']
+
+            reply = Reply.objects.create(
+                answer=answer,
+                user=request.user,
+                body=body,
+            )
+
+            # @ai メンションの検出
+            if '@ai' in body.lower():
+                # AI返信をCeleryで非同期生成
+                generate_ai_reply.delay(reply.pk)
+
+        return redirect('questions:detail', pk=answer.question.pk)
+
+
+class ReplyDeleteView(LoginRequiredMixin, View):
+    """返信削除"""
+
+    def post(self, request, pk):
+        reply = get_object_or_404(Reply, pk=pk)
+        question_pk = reply.answer.question.pk
+        if reply.user == request.user or reply.answer.question.user == request.user:
+            reply.soft_delete(user=request.user, description='返信を削除')
+        return redirect('questions:detail', pk=question_pk)
+
+
+# ===== AI注釈 API =====
+
+class AIAnnotationCreateView(LoginRequiredMixin, View):
+    """AI注釈生成API（数式導出・単語説明）"""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        answer_id = data.get('answer_id')
+        selected_text = data.get('selected_text', '')
+        annotation_type = data.get('type', 'word')  # 'formula' or 'word'
+        context_before = data.get('context_before', '')
+        context_after = data.get('context_after', '')
+
+        if not answer_id or not selected_text:
+            return JsonResponse({'error': 'answer_id and selected_text required'}, status=400)
+
+        try:
+            answer = Answer.objects.get(pk=answer_id, is_deleted=False)
+        except Answer.DoesNotExist:
+            return JsonResponse({'error': 'Answer not found'}, status=404)
+
+        # 既存の注釈をチェック
+        existing = AIAnnotation.objects.filter(
+            answer=answer,
+            selected_text=selected_text,
+            annotation_type=annotation_type,
+            created_by=request.user,
+        ).first()
+
+        if existing:
+            return JsonResponse({
+                'status': 'exists',
+                'annotation_id': existing.pk,
+                'explanation': existing.explanation,
+            })
+
+        # AI生成
+        try:
+            from .services.gemini_service import generate_annotation
+            explanation = generate_annotation(
+                selected_text=selected_text,
+                context_before=context_before,
+                context_after=context_after,
+                annotation_type=annotation_type,
+                subject_name=answer.question.display_subject,
+            )
+        except Exception as e:
+            logger.error(f'AI注釈生成失敗: {e}')
+            return JsonResponse({'error': 'AI生成に失敗しました'}, status=500)
+
+        annotation = AIAnnotation.objects.create(
+            answer=answer,
+            annotation_type=annotation_type,
+            selected_text=selected_text,
+            context_before=context_before,
+            context_after=context_after,
+            explanation=explanation,
+            created_by=request.user,
+        )
+
+        return JsonResponse({
+            'status': 'created',
+            'annotation_id': annotation.pk,
+            'explanation': annotation.explanation,
+        })
+
+
+class AIAnnotationGetView(LoginRequiredMixin, View):
+    """既存のAI注釈を取得"""
+
+    def get(self, request, pk):
+        annotation = get_object_or_404(AIAnnotation, pk=pk, created_by=request.user)
+        return JsonResponse({
+            'annotation_id': annotation.pk,
+            'selected_text': annotation.selected_text,
+            'annotation_type': annotation.annotation_type,
+            'explanation': annotation.explanation,
+        })
+
+
+class AnswerAnnotationsView(LoginRequiredMixin, View):
+    """回答に対するユーザの全注釈を取得"""
+
+    def get(self, request, pk):
+        annotations = AIAnnotation.objects.filter(
+            answer_id=pk,
+            created_by=request.user,
+        ).values('id', 'selected_text', 'annotation_type', 'explanation')
+        return JsonResponse({'annotations': list(annotations)})
+
+
+class AutoSupplementView(LoginRequiredMixin, View):
+    """回答投稿時の自動補完API"""
+
+    def post(self, request):
+        try:
+            data = json.loads(request.body)
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+        answer_body = data.get('body', '')
+        subject_name = data.get('subject_name', '')
+
+        if not answer_body:
+            return JsonResponse({'error': 'body required'}, status=400)
+
+        try:
+            from .services.gemini_service import generate_supplements
+            supplements = generate_supplements(answer_body, subject_name)
+        except Exception as e:
+            logger.error(f'自動補完生成失敗: {e}')
+            return JsonResponse({'error': 'AI生成に失敗しました'}, status=500)
+
+        return JsonResponse({'supplements': supplements})
+

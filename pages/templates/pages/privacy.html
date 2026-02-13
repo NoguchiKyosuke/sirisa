@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block title %}プライバシーポリシー{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <h2 class="mb-4"><i class="bi bi-shield-check"></i> プライバシーポリシー</h2>
+            <p class="text-muted small">最終更新日: 2026年2月13日</p>
+
+            <h4>1. 収集する情報</h4>
+            <p>本サービスでは以下の情報を収集します:</p>
+            <ul>
+                <li><strong>メールアドレス:</strong> アカウント作成・認証のために利用します。</li>
+                <li><strong>表示名:</strong> 投稿時の表示に利用します。</li>
+                <li><strong>投稿コンテンツ:</strong> 質問・回答・リプライの内容。</li>
+                <li><strong>アップロードファイル:</strong> 質問に添付された画像等。</li>
+            </ul>
+
+            <h4>2. 情報の利用目的</h4>
+            <ul>
+                <li>サービスの提供・運営</li>
+                <li>ログイン認証（パスワードレス認証）</li>
+                <li>AI回答の生成</li>
+                <li>サービスの改善</li>
+            </ul>
+
+            <h4>3. 第三者への提供</h4>
+            <p>以下の場合を除き、個人情報を第三者に提供することはありません:</p>
+            <ul>
+                <li>法令に基づく場合</li>
+                <li>AI回答生成のため、質問内容をGoogle Gemini APIに送信する場合（個人情報を除く）</li>
+                <li>リンクの安全性確認のため、URLをGoogle Safe Browsing APIに送信する場合</li>
+            </ul>
+
+            <h4>4. データの保管</h4>
+            <ul>
+                <li>データはGoogle Cloud上のサーバーに保管されます。</li>
+                <li>パスワードは保存されません（パスワードレス認証を採用）。</li>
+                <li>通信はSSL/TLSで暗号化されます。</li>
+            </ul>
+
+            <h4>5. アカウント削除</h4>
+            <ul>
+                <li>アカウント削除時、メールアドレスと表示名は匿名化されます。</li>
+                <li>投稿された質問・回答はサービスの継続性のため残ります。</li>
+                <li>アカウント削除はプロフィールページから行えます。</li>
+            </ul>
+
+            <h4>6. Cookieの使用</h4>
+            <p>本サービスではセッション管理およびCSRF対策のためにCookieを使用します。トラッキング目的のCookieは使用しません。</p>
+
+            <h4>7. お問い合わせ</h4>
+            <p>プライバシーに関するお問い合わせは <a href="{% url 'pages:contact' %}">お問い合わせページ</a> よりご連絡ください。</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

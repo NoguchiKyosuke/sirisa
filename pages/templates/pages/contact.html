@@ -1,0 +1,36 @@
+{% extends 'base.html' %}
+{% block title %}お問い合わせ{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <h2 class="mb-4"><i class="bi bi-envelope"></i> お問い合わせ</h2>
+
+            <p>SIRISAに関するご質問・ご意見・不具合報告は、以下の方法でお問い合わせください。</p>
+
+            <div class="card mb-3" style="background: var(--bs-tertiary-bg, #f8f9fa);">
+                <div class="card-body">
+                    <h5><i class="bi bi-envelope-at"></i> メールでのお問い合わせ</h5>
+                    <p class="mb-1">以下のメールアドレスにお問い合わせください:</p>
+                    <a href="mailto:k.noguchi2005@gmail.com" class="btn btn-outline-primary">
+                        <i class="bi bi-envelope"></i> k.noguchi2005@gmail.com
+                    </a>
+                </div>
+            </div>
+
+            <div class="card" style="background: var(--bs-tertiary-bg, #f8f9fa);">
+                <div class="card-body">
+                    <h5><i class="bi bi-info-circle"></i> お問い合わせ時の注意事項</h5>
+                    <ul class="mb-0">
+                        <li>件名に「SIRISA」を含めてください。</li>
+                        <li>不具合報告の場合は、発生した状況をできるだけ詳しく記載してください。</li>
+                        <li>スクリーンショットがあると対応がスムーズです。</li>
+                        <li>お返事には数日かかる場合があります。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

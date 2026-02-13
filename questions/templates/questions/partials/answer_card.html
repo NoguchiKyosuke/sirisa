@@ -1,4 +1,4 @@
-<div class="card mb-3 {% if answer.is_ai_generated %}border-info{% endif %}">
+<div class="card mb-3 {% if answer.is_ai_generated %}ai-answer-card{% endif %}" id="answer-card-{{ answer.pk }}">
     <div class="card-body">
         <!-- ヘッダー -->
         <div class="d-flex justify-content-between align-items-start mb-2">
@@ -18,18 +18,32 @@
         </div>
 
         <!-- 回答本文 -->
+        {% if answer.is_ai_generated and answer.sandbox_token %}
+        <!-- AI回答: サンドボックスiframe -->
+        <div class="answer-body" data-answer-id="{{ answer.pk }}">
+            <iframe
+                src="https://{{ content_domain|default:'content.sirisa.net' }}/content/answer/{{ answer.pk }}/?token={{ answer.sandbox_token }}"
+                sandbox="allow-scripts"
+                class="w-100 border-0"
+                id="sandbox-{{ answer.pk }}"
+                style="min-height:100px;overflow:hidden;"
+                loading="lazy"
+            ></iframe>
+        </div>
+        {% else %}
         {% with body_len=answer.body|length %}
         {% if body_len > 500 %}
-        <div class="answer-body answer-collapsed" id="answer-body-{{ answer.pk }}">
+        <div class="answer-body answer-collapsed" id="answer-body-{{ answer.pk }}" data-answer-id="{{ answer.pk }}">
             {{ answer.rendered_body|safe }}
         </div>
         <button class="btn btn-link btn-sm p-0 mt-1" onclick="toggleExpand(this)">展開する</button>
         {% else %}
-        <div class="answer-body">
+        <div class="answer-body" data-answer-id="{{ answer.pk }}">
             {{ answer.rendered_body|safe }}
         </div>
         {% endif %}
         {% endwith %}
+        {% endif %}
 
         <!-- メディアファイル -->
         {% if answer.media_files.all %}
@@ -57,22 +71,56 @@
 
         <!-- リアクション -->
         {% include 'questions/partials/reaction_buttons.html' with answer=answer %}
+
+        <!-- 返信セクション -->
+        <div class="border-top pt-3 mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <small class="text-muted"><i class="bi bi-chat-left-text"></i> 返信</small>
+                <button class="btn btn-sm btn-outline-secondary" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#replies-{{ answer.pk }}">
+                    {% if answer.reply_list %}{{ answer.reply_list|length }}件の返信{% else %}返信する{% endif %}
+                </button>
+            </div>
+            <div class="collapse {% if answer.reply_list %}show{% endif %}" id="replies-{{ answer.pk }}">
+                {% for reply in answer.reply_list %}
+                <div class="d-flex gap-2 mb-2 ms-3 p-2 rounded" style="background: var(--bs-tertiary-bg, #f8f9fa);">
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <small>
+                                {% if reply.is_ai_generated %}
+                                <span class="ai-badge"><i class="bi bi-robot"></i> AI</span>
+                                {% else %}
+                                <strong>{{ reply.user.username }}</strong>
+                                {% endif %}
+                                <span class="text-muted ms-1">{{ reply.created_at|date:"m/d H:i" }}</span>
+                            </small>
+                            {% if reply.user == user or answer.question.user == user %}
+                            <form method="post" action="{% url 'questions:reply_delete' reply.pk %}" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-sm text-muted p-0" title="削除"
+                                        onclick="return confirm('この返信を削除しますか？')">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                        {% if reply.is_ai_generated and reply.ai_generation_status == 'pending' %}
+                        <div class="text-muted small"><i class="bi bi-hourglass-split"></i> AI返信を生成中...</div>
+                        {% else %}
+                        <div class="small mt-1">{{ reply.body|linebreaksbr }}</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+                <!-- 返信フォーム -->
+                <form method="post" action="{% url 'questions:reply_create' answer.pk %}" class="ms-3 mt-2">
+                    {% csrf_token %}
+                    <div class="input-group input-group-sm">
+                        <textarea name="body" class="form-control" rows="1" placeholder="返信を入力... @ai でAIに質問できます" required></textarea>
+                        <button type="submit" class="btn btn-sirisa btn-sm"><i class="bi bi-send"></i></button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
-
-<style>
-.answer-collapsed {
-    max-height: 200px;
-    overflow: hidden;
-    position: relative;
-}
-.answer-collapsed::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 60px;
-    background: linear-gradient(transparent, var(--bs-body-bg, white));
-}
-</style>

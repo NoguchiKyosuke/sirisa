@@ -168,12 +168,20 @@ class ProfileView(LoginRequiredMixin, View):
     """プロフィール設定画面"""
     login_url = '/accounts/login/'
 
+    @staticmethod
+    def _mask_email(email):
+        """メールアドレスをマスクする（先頭1文字以外を*に）"""
+        local, domain = email.split('@')
+        masked_local = local[0] + '*' * (len(local) - 1) if len(local) > 1 else local
+        return f'{masked_local}@{domain}'
+
     def get(self, request):
         form = ProfileForm(instance=request.user)
         email_form = EmailChangeForm(user=request.user)
         return render(request, 'accounts/profile.html', {
             'form': form,
             'email_form': email_form,
+            'masked_email': self._mask_email(request.user.email),
         })
 
     def post(self, request):
@@ -186,6 +194,7 @@ class ProfileView(LoginRequiredMixin, View):
         return render(request, 'accounts/profile.html', {
             'form': form,
             'email_form': email_form,
+            'masked_email': self._mask_email(request.user.email),
         })
 
 
@@ -265,9 +274,7 @@ class AccountDeleteView(LoginRequiredMixin, View):
 
     def post(self, request):
         user = request.user
-        user.is_deleted = True
-        user.deleted_at = timezone.now()
-        user.save(update_fields=['is_deleted', 'deleted_at'])
+        user.anonymize_for_deletion()
         logout(request)
         messages.info(request, 'アカウントを削除しました。')
         return redirect('accounts:login')

@@ -58,6 +58,19 @@ class Question(TimeStampMixin, SoftDeleteMixin):
     )
     is_resolved = models.BooleanField('解決済み', default=False)
 
+    # グループ共有: Noneなら全体公開
+    group = models.ForeignKey(
+        'groups.StudyGroup', on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='questions',
+        verbose_name='共有グループ',
+    )
+    visibility = models.CharField(
+        '公開範囲', max_length=10,
+        choices=[('public', '全体公開'), ('group', 'グループ内')],
+        default='public',
+    )
+
     class Meta:
         verbose_name = '質問'
         verbose_name_plural = '質問'
@@ -340,3 +353,71 @@ class AnswerDraft(models.Model):
 
     def __str__(self):
         return f'{self.user.username} の回答下書き'
+
+
+class Reply(TimeStampMixin, SoftDeleteMixin):
+    """回答への返信モデル"""
+
+    answer = models.ForeignKey(
+        Answer, on_delete=models.CASCADE,
+        related_name='replies',
+        verbose_name='回答',
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='replies',
+        verbose_name='返信者',
+    )
+    body = models.TextField('返信本文')
+    is_ai_generated = models.BooleanField('AI生成', default=False)
+    ai_model = models.CharField('AIモデル', max_length=50, blank=True)
+    ai_generation_status = models.CharField(
+        'AI生成ステータス', max_length=10,
+        choices=Answer.AIStatus.choices, default=Answer.AIStatus.NONE,
+    )
+
+    class Meta:
+        verbose_name = '返信'
+        verbose_name_plural = '返信'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.answer} への返信 by {self.user.username}'
+
+
+class AIAnnotation(TimeStampMixin):
+    """AIによる補足注釈（数式導出・単語説明）"""
+
+    class AnnotationType(models.TextChoices):
+        FORMULA = 'formula', '数式導出'
+        WORD = 'word', '単語説明'
+        SUPPLEMENT = 'supplement', '補完情報'
+
+    answer = models.ForeignKey(
+        Answer, on_delete=models.CASCADE,
+        related_name='annotations',
+        verbose_name='回答',
+    )
+    annotation_type = models.CharField(
+        '注釈種別', max_length=20,
+        choices=AnnotationType.choices,
+    )
+    selected_text = models.TextField('選択テキスト')
+    context_before = models.TextField('前文脈', blank=True)
+    context_after = models.TextField('後文脈', blank=True)
+    explanation = models.TextField('AI説明（Markdown）')
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='annotations',
+        verbose_name='作成者',
+    )
+
+    class Meta:
+        verbose_name = 'AI注釈'
+        verbose_name_plural = 'AI注釈'
+
+    def __str__(self):
+        return f'{self.annotation_type}: {self.selected_text[:30]}'
+

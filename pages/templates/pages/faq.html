@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}よくある質問{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card p-4">
+            <h2 class="mb-4"><i class="bi bi-question-circle"></i> よくある質問（FAQ）</h2>
+
+            <div class="accordion" id="faqAccordion">
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+                            SIRISAとは何ですか？
+                        </button>
+                    </h2>
+                    <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            SIRISAは高校生の学習を支援するQ&amp;Aプラットフォームです。質問を投稿すると、Gemini AIが自動的に回答を生成します。教師やクラスメイトからの回答も受けることができます。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+                            パスワードは必要ですか？
+                        </button>
+                    </h2>
+                    <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            SIRISAはパスワードレス認証を採用しています。ログイン時にメールアドレスを入力すると、6桁の認証コードがメールで届きます。コードを入力するだけでログインできます。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+                            AI回答はどのくらいの時間で生成されますか？
+                        </button>
+                    </h2>
+                    <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            通常10〜30秒程度で生成されます。画像や動画が添付されている場合はもう少し時間がかかることがあります。生成中は画面にプログレスバーが表示されます。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+                            グループとは何ですか？
+                        </button>
+                    </h2>
+                    <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            グループは少人数で質問を共有できる機能です。クラスや勉強会のメンバーでグループを作成し、メンバーだけが閲覧できる質問を投稿できます。招待コードを共有するだけで参加できます。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                            @ai メンションとは？
+                        </button>
+                    </h2>
+                    <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            回答への返信で <code>@ai</code> を含めると、AIが返信スレッドの文脈を理解した上で追加の説明をしてくれます。「@ai この公式をもっと詳しく教えて」のように使えます。
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+                            添付できるファイルの種類と上限は？
+                        </button>
+                    </h2>
+                    <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            <p>以下のファイルを添付できます（合計100MBまで）:</p>
+                            <ul>
+                                <li><strong>画像:</strong> JPG, PNG, GIF, WebP, SVG</li>
+                                <li><strong>音声:</strong> MP3, WAV, OGG, M4A</li>
+                                <li><strong>動画:</strong> MP4, WebM, MOV, AVI</li>
+                                <li><strong>文書:</strong> PDF, DOC, DOCX, TXT</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq7">
+                            アカウントを削除したいのですが？
+                        </button>
+                    </h2>
+                    <div id="faq7" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body">
+                            プロフィール画面の最下部にある「アカウントを削除する」から削除できます。削除すると個人情報は匿名化されますが、投稿した質問や回答は残ります。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
