@@ -165,7 +165,7 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
             content_parts,
             generation_config=GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=16384,
+                max_output_tokens=8192,
             ),
         )
 
