@@ -356,12 +356,9 @@ class QuestionDetailView(LoginRequiredMixin, View):
         # 各回答の本文もHTML変換し、リアクション情報を付与
         for answer in answers:
             if answer.is_ai_generated:
-                sanitized, scope = sanitize_ai_html(answer.body, answer.pk)
-                answer.rendered_body = sanitized
-                answer.ai_scope_class = scope
+                answer.rendered_body = sanitize_ai_html(answer.body, answer.pk)
             else:
                 answer.rendered_body = render_body(answer.body, answer.body_format)
-                answer.ai_scope_class = ''
             answer.sandbox_token = generate_token(answer.pk)
             # ユーザのリアクション種別一覧
             answer.user_reactions = [
@@ -554,12 +551,9 @@ class AnswerStatusAPIView(LoginRequiredMixin, View):
         if answer.ai_generation_status == 'completed':
             # 完了した場合、回答カードの部分テンプレートを返す
             if answer.is_ai_generated:
-                sanitized, scope = sanitize_ai_html(answer.body, answer.pk)
-                answer.rendered_body = sanitized
-                answer.ai_scope_class = scope
+                answer.rendered_body = sanitize_ai_html(answer.body, answer.pk)
             else:
                 answer.rendered_body = render_body(answer.body, answer.body_format)
-                answer.ai_scope_class = ''
             from content.views import generate_token
             answer.sandbox_token = generate_token(answer.pk)
             answer.user_reactions = []

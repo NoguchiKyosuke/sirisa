@@ -20,8 +20,10 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 ## 出力処理
 - AI回答・返信・注釈はすべてHTML形式で出力（Markdown不可）
 - AI回答はそのままDBに保存（コードフェンス除去のみ）
-- 表示時に `sanitize_ai_html()` で処理: 未閉じタグ自動閉じ + `<style>`スコープ化（`<script>`等は除去しない）
-- AI回答はページ内に直接表示（iframe不使用）
+- 表示時に `sanitize_ai_html()` で前処理: 未閉じタグ自動閉じ + integrity属性除去（`<style>`, `<script>` はそのまま維持）
+- AI回答はShadow DOM内に表示（CSS/JSがページ全体に影響しない）
+- AI回答内の `document.getElementById` 等はShadow Root経由に自動変換される
+- KaTeX CSSはShadow DOM内に別途読み込み
 - ユーザ回答は従来通り `bleach.clean()` でサニタイズ
 
 ## エラーハンドリング
@@ -32,5 +34,6 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 ## セキュリティ
 - API キーはコードにハードコードしない
 - ユーザー入力をプロンプトに含める際は適切にエスケープ
-- AI生成結果は保存後、表示時に `sanitize_ai_html()` で安全化（タグ閉じ・スタイルスコープのみ。script等は除去しない）
+- AI生成結果は保存後、表示時に `sanitize_ai_html()` で前処理（タグ閉じ・integrity除去のみ。script/styleは除去しない）
+- AI回答はShadow DOMで表示されるため、CSS/JSはページ全体に影響しない
 - ユーザ回答は `bleach` でサニタイズしてから保存

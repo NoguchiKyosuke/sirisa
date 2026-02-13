@@ -52,9 +52,10 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 
 ## セキュリティ
 - IP制限によりアクセス可能なユーザが限定されているため、HTML出力に制限なし
-- AI回答はページ内に直接表示（iframe不使用）
-- AI回答HTMLは `sanitize_ai_html()` で処理: 未閉じタグ自動閉じ + `<style>`スコープ化（`<script>`等は除去しない）
-- AI回答には必ずCSSアニメーション（フェードイン等）+ JSインタラクション（クリック展開等）を含める（プロンプトで強制）
+- AI回答はShadow DOM内に表示（CSS/JSがページ全体に影響しない）
+- `sanitize_ai_html()` で前処理: 未閉じタグ自動閉じ + integrity属性除去（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
+- AI回答の `<script>` 内の `document.getElementById` 等はShadow Root経由に自動変換
+- AI回答には必ずCSSアニメーション + JSインタラクションを含める（プロンプトで強制）
 - `max_output_tokens=16384`でリッチHTML生成に十分な余地を確保
 - ユーザ回答のHTMLは `bleach` でサニタイズ
 - ファイルアップロードは100MB制限

@@ -108,20 +108,17 @@ def scope_style_tags(html_str, scope_class):
 
 
 def sanitize_ai_html(html_str, answer_id):
-    """AI回答HTMLをページ内表示用に安全にする（タグ閉じ+スタイルスコープ）
+    """AI回答HTMLをShadow DOM表示用に前処理する
     
-    - <style>: スコープクラスを付与し、回答内のみに影響するようにする
-    - <script>: そのまま維持（除去しない）
+    Shadow DOMでCSS/JSが完全に隔離されるため、スタイルスコープは不要。
     - integrity属性: CDNリソースの不正ハッシュによるブロックを防ぐため除去
-    - 未閉じタグ: 自動で閉じタグを追加
+    - 未閉じタグ: 自動で閉じタグを追加（ページ構造の破壊を防止）
+    - <style>, <script>: そのまま維持（Shadow DOM内で隔離される）
     """
-    scope_class = f'ai-answer-{answer_id}'
     # Geminiが出力するintegrity属性は不正値のことが多くリソースがブロックされるため除去
     result = re.sub(r'\s+integrity=["\'][^"\']*["\']', '', html_str)
     # crossorigin属性もintegrityなしでは不要なため除去
     result = re.sub(r'\s+crossorigin(?:=["\'][^"\']*["\'])?', '', result)
-    # <style>をスコープ（除去ではなくスコープ化のみ）
-    result = scope_style_tags(result, scope_class)
     # 未閉じタグを閉じる
     result = close_unclosed_tags(result)
-    return result, scope_class
+    return result
