@@ -24,11 +24,14 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 │   │   ├── celery.py       # Celeryアプリ設定
 │   │   └── urls.py
 │   ├── core/               # 共通モデル（SoftDelete, TimeStamp, DeletionLog）
-│   ├── accounts/           # 認証（カスタムUser, 2FA, Gmail API）
-│   ├── questions/          # 質問・回答・リアクション・エクスポート機能
+│   ├── accounts/           # 認証（カスタムUser, パスワードレス認証）
+│   ├── questions/          # 質問・回答・リアクション・返信・AI注釈・エクスポート
 │   │   ├── services/       # Gemini AI, プロンプト
 │   │   ├── fixtures/       # subjects.json (教科マスタ)
 │   │   └── export.py       # CSV/XLSX/PDF/MD/TXT
+│   ├── content/            # サンドボックスiframe配信 (content.sirisa.net)
+│   ├── groups/             # 学習グループ（招待コード、メンバー管理）
+│   ├── pages/              # 静的ページ（FAQ, 利用規約, プライバシー等）
 │   ├── templates/          # グローバルテンプレート (base.html, 404, 500)
 │   └── requirements.txt
 ```
@@ -48,8 +51,10 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - フォームには Bootstrap 5 クラスを付与
 
 ## セキュリティ
-- HTMLは `bleach` でサニタイズ
-- ファイルアップロードは30MB制限
+- ユーザ回答のHTMLは `bleach` でサニタイズ
+- AI回答はサニタイズせず、content.sirisa.net のサンドボックスiframe内で隔離表示
+- AI回答: `<style>`, `<script>`, `<svg>`, CSSアニメーション、JS を制限なく許可
+- ファイルアップロードは100MB制限
 - 本番環境は IP 制限あり（Nginx）
 - `CSRF_COOKIE_HTTPONLY = True`
 

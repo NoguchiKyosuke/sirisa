@@ -153,17 +153,13 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
             # コードフェンス（```html...```）を除去
             html_answer = strip_code_fences(response.text)
 
-            # <style>ブロックを除去
-            html_answer = strip_style_blocks(html_answer)
-
             # HTMLタグが含まれていない場合は<p>タグで囲む
-            if not any(tag in html_answer for tag in ['<p>', '<h', '<div>', '<ul>', '<ol>']):
+            if not any(tag in html_answer for tag in ['<p>', '<h', '<div>', '<ul>', '<ol>', '<svg>', '<style>']):
                 html_answer = f'<div>{html_answer}</div>'
 
-            # サニタイズして返す
-            sanitized = sanitize_html(html_answer)
+            # サンドボックスiframe内で表示するため、サニタイズせずそのまま返す
             logger.info(f'Gemini API呼び出し成功: {question_title}')
-            return sanitized
+            return html_answer
         else:
             raise ValueError('Gemini APIから空のレスポンスが返されました。')
 

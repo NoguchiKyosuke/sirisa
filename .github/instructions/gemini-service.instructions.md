@@ -7,18 +7,18 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 ## SDK
 - `google-generativeai` パッケージを使用
 - モデル: `gemini-2.0-flash`
-- API キー: `settings.GEMINI_API_KEY`（.env から読み込み）
+- API キー: `settings.GCLOUD_API_KEY`（.env から読み込み）
 
 ## プロンプト設計
 - `prompts.py` に `BASE_PROMPT` と `SUBJECT_PROMPTS` を定義
 - 教科別プロンプトで専門的な回答を生成
 - ベースプロンプト: 高校生向け、日本語、段階的説明、KaTeX数式対応
+- プロンプトで `<style>`, `<script>`, `<svg>` の使用を推奨（CSSアニメーション、SVG図形、JSインタラクション）
 
 ## 出力処理
-- 生成テキストは `bleach.clean()` でサニタイズ
-- 許可タグ: p, br, strong, em, ul, ol, li, code, pre, h3, h4, h5, blockquote, span, div, sub, sup, table, thead, tbody, tr, th, td
-- 許可属性: class（KaTeX用）
-- Markdown → HTML 変換は `markdown` ライブラリ + `fenced_code`, `tables` 拡張
+- AI回答はサニタイズせずそのままDBに保存（コードフェンス除去のみ）
+- セキュリティは content.sirisa.net のサンドボックスiframe（sandbox="allow-scripts"）で確保
+- ユーザ回答は従来通り `bleach.clean()` でサニタイズ
 
 ## エラーハンドリング
 - API キー未設定: ログ警告して空文字返却
@@ -28,4 +28,5 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 ## セキュリティ
 - API キーはコードにハードコードしない
 - ユーザー入力をプロンプトに含める際は適切にエスケープ
-- 生成結果は必ずサニタイズしてから保存
+- AI生成結果はサニタイズせず保存し、サンドボックスiframeで隔離表示する
+- ユーザ回答は `bleach` でサニタイズしてから保存

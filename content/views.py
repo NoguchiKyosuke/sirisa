@@ -37,10 +37,10 @@ class SandboxedAnswerView(View):
 
         answer = get_object_or_404(Answer, pk=pk, is_deleted=False)
 
-        # AI回答はタグ制限なし、ユーザ回答はサニタイズ済み
+        # AI回答はタグ制限なし（サンドボックスで隔離）、ユーザ回答はサニタイズ済み
         if answer.is_ai_generated:
-            from questions.services.gemini_service import strip_code_fences, strip_style_blocks
-            body_html = strip_style_blocks(strip_code_fences(answer.body))
+            from questions.services.gemini_service import strip_code_fences
+            body_html = strip_code_fences(answer.body)
         else:
             from questions.utils import render_body
             body_html = render_body(answer.body, answer.body_format)
@@ -52,11 +52,11 @@ class SandboxedAnswerView(View):
 
         response = HttpResponse(html, content_type='text/html')
         response['Content-Security-Policy'] = (
-            "default-src 'none'; "
-            "script-src 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "style-src 'unsafe-inline' https://cdn.jsdelivr.net; "
-            "font-src https://cdn.jsdelivr.net; "
-            "img-src * data:; "
+            "default-src 'self'; "
+            "script-src 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
+            "style-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+            "font-src https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.gstatic.com; "
+            "img-src * data: blob:; "
             "media-src *; "
             "connect-src 'none'; "
             "frame-src 'none';"
