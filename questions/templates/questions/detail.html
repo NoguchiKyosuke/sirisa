@@ -166,7 +166,7 @@
 
 <!-- AI注釈ポップアップ -->
 <div class="annotation-popup" id="annotationPopup">
-    <span class="close-btn" onclick="hideAnnotationPopup()">&times;</span>
+    <span class="close-btn" onclick="_popupOnTrigger=false;_popupOnPopup=false;clearTimeout(_popupHoverTimer);this.parentElement.style.display='none'">&times;</span>
     <div id="annotationContent"></div>
 </div>
 
@@ -396,8 +396,14 @@ document.addEventListener('mouseup', function(e) {
 document.addEventListener('mousedown', function(e) {
     const aiBtn = document.getElementById('aiAskBtn');
     const popup = document.getElementById('annotationPopup');
-    if (!aiBtn.contains(e.target) && !popup.contains(e.target)) {
+    if (!aiBtn.contains(e.target)) {
         aiBtn.style.display = 'none';
+    }
+    if (!popup.contains(e.target)) {
+        _popupOnTrigger = false;
+        _popupOnPopup = false;
+        popup.style.display = 'none';
+        clearTimeout(_popupHoverTimer);
     }
 });
 
@@ -478,11 +484,14 @@ function highlightSelection(annotationData, explanation, annotationId) {
             span.dataset.annotationId = annotationId || '';
             span.dataset.explanation = explanation;
             span.addEventListener('mouseenter', function(ev) {
+                _popupOnTrigger = true;
+                clearTimeout(_popupHoverTimer);
                 const r = this.getBoundingClientRect();
                 showAnnotationPopup(this.dataset.explanation, r.left + 'px', (r.bottom + 4) + 'px');
             });
             span.addEventListener('mouseleave', function() {
-                hideAnnotationPopup();
+                _popupOnTrigger = false;
+                scheduleHidePopup();
             });
             range.surroundContents(span);
             if (typeof renderMathInElement !== 'undefined') {
@@ -551,7 +560,13 @@ function handleFormulaClick(katexEl, answerId, contextEl) {
     });
 }
 
+// ポップアップの表示状態管理
+let _popupHoverTimer = null;
+let _popupOnTrigger = false;  // トリガー要素上にいるか
+let _popupOnPopup = false;   // ポップアップ上にいるか
+
 function showAnnotationPopup(html, left, top) {
+    clearTimeout(_popupHoverTimer);
     const popup = document.getElementById('annotationPopup');
     const content = document.getElementById('annotationContent');
     content.innerHTML = html;
@@ -578,9 +593,34 @@ function showAnnotationPopup(html, left, top) {
     }
 }
 
-function hideAnnotationPopup() {
-    document.getElementById('annotationPopup').style.display = 'none';
+function scheduleHidePopup() {
+    // トリガー要素かポップアップのどちらかにいる限り消さない
+    clearTimeout(_popupHoverTimer);
+    _popupHoverTimer = setTimeout(function() {
+        if (!_popupOnTrigger && !_popupOnPopup) {
+            document.getElementById('annotationPopup').style.display = 'none';
+        }
+    }, 120);
 }
+
+function hideAnnotationPopup() {
+    _popupOnTrigger = false;
+    scheduleHidePopup();
+}
+
+// ポップアップ要素のマウスイベント
+(function() {
+    const popup = document.getElementById('annotationPopup');
+    if (!popup) return;
+    popup.addEventListener('mouseenter', function() {
+        _popupOnPopup = true;
+        clearTimeout(_popupHoverTimer);
+    });
+    popup.addEventListener('mouseleave', function() {
+        _popupOnPopup = false;
+        scheduleHidePopup();
+    });
+})();
 
 // ===== 初期化 =====
 document.addEventListener('DOMContentLoaded', function() {
