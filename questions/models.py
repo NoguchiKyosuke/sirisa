@@ -429,3 +429,57 @@ class AIAnnotation(TimeStampMixin):
     def __str__(self):
         return f'{self.annotation_type}: {self.selected_text[:30]}'
 
+
+class AIUsageLog(models.Model):
+    """AI API使用回数ログ（1アカウント1日100回制限）"""
+
+    DAILY_LIMIT = 100
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='ai_usage_logs',
+        verbose_name='ユーザ',
+    )
+    date = models.DateField('使用日')
+    usage_count = models.PositiveIntegerField('使用回数', default=0)
+
+    class Meta:
+        verbose_name = 'AI使用ログ'
+        verbose_name_plural = 'AI使用ログ'
+        unique_together = ['user', 'date']
+
+    def __str__(self):
+        return f'{self.user.username} - {self.date}: {self.usage_count}回'
+
+    @classmethod
+    def get_today_usage(cls, user):
+        """今日の使用回数を取得"""
+        from django.utils import timezone
+        today = timezone.localdate()
+        log, _ = cls.objects.get_or_create(user=user, date=today, defaults={'usage_count': 0})
+        return log.usage_count
+
+    @classmethod
+    def can_use(cls, user):
+        """使用可能かどうかを判定"""
+        return cls.get_today_usage(user) < cls.DAILY_LIMIT
+
+    @classmethod
+    def remaining(cls, user):
+        """残り使用可能回数を取得"""
+        return max(0, cls.DAILY_LIMIT - cls.get_today_usage(user))
+
+    @classmethod
+    def increment(cls, user, count=1):
+        """使用回数をインクリメントする"""
+        from django.utils import timezone
+        from django.db.models import F
+        today = timezone.localdate()
+        log, created = cls.objects.get_or_create(
+            user=user, date=today, defaults={'usage_count': count}
+        )
+        if not created:
+            cls.objects.filter(pk=log.pk).update(usage_count=F('usage_count') + count)
+        return log
+

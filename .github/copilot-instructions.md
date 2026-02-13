@@ -8,7 +8,8 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - **Backend**: Python 3.12, Django 4.2 LTS
 - **Database**: PostgreSQL 16
 - **Task Queue**: Celery 5.6 + Redis
-- **AI**: Google Gemini 2.0 Flash (google-generativeai SDK)
+- **AI**: Google Gemini 2.0 Flash (Vertex AI / google-cloud-aiplatform SDK)
+- **AI制限**: 1アカウント1日100回（`AIUsageLog` モデル）
 - **Frontend**: Django Templates + htmx 2.0 + Bootstrap 5.3 + KaTeX
 - **Server**: Nginx + Gunicorn (systemd)
 

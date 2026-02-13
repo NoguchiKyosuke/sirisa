@@ -11,14 +11,15 @@ User = get_user_model()
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=10)
-def generate_ai_answer(self, question_id):
+def generate_ai_answer(self, question_id, user_id=None):
     """
-    質問に対してGemini AIの回答を非同期で生成する（通常 + スライドの2種類）
+    質問に対してVertex AI (Gemini)の回答を非同期で生成する（通常 + スライドの2種類）
 
     Args:
         question_id: 質問のID
+        user_id: 質問者のユーザID（使用回数カウント用）
     """
-    from questions.models import Question, Answer
+    from questions.models import Question, Answer, AIUsageLog
     from questions.services.gemini_service import generate_answer
 
     logger.info(f'AI回答生成タスク開始: question_id={question_id}')
@@ -60,6 +61,14 @@ def generate_ai_answer(self, question_id):
 
     subject_name = question.display_subject
 
+    # AI使用回数制限チェック（user_idがある場合）
+    requesting_user = None
+    if user_id:
+        try:
+            requesting_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            pass
+
     # 2種類の回答を生成: normal と slide
     for style in ('normal', 'slide'):
         answer, created = Answer.objects.get_or_create(
@@ -80,6 +89,19 @@ def generate_ai_answer(self, question_id):
             continue
 
         try:
+            # 使用回数制限チェック
+            if requesting_user and not AIUsageLog.can_use(requesting_user):
+                answer.body = (
+                    '<div class="alert alert-warning">'
+                    '<strong>本日のAI使用回数（100回）に達しました。</strong><br>'
+                    '明日以降、再度お試しください。'
+                    '</div>'
+                )
+                answer.ai_generation_status = 'failed'
+                answer.save(update_fields=['body', 'ai_generation_status', 'updated_at'])
+                logger.warning(f'AI回答({style})使用制限: user_id={user_id}')
+                continue
+
             html_answer = generate_answer(
                 question_title=question.title,
                 question_body=question.body,
@@ -92,6 +114,11 @@ def generate_ai_answer(self, question_id):
             answer.body = html_answer
             answer.ai_generation_status = 'completed'
             answer.save(update_fields=['body', 'ai_generation_status', 'updated_at'])
+
+            # 使用回数をインクリメント
+            if requesting_user:
+                AIUsageLog.increment(requesting_user)
+
             logger.info(f'AI回答({style})生成成功: question_id={question_id}')
 
         except Exception as exc:
@@ -113,14 +140,15 @@ def generate_ai_answer(self, question_id):
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=5)
-def generate_ai_reply(self, reply_id):
+def generate_ai_reply(self, reply_id, user_id=None):
     """
     @aiメンション付き返信に対してAI返信を非同期生成する
 
     Args:
         reply_id: 返信のID
+        user_id: 返信者のユーザID（使用回数カウント用）
     """
-    from questions.models import Reply
+    from questions.models import Reply, AIUsageLog
     from questions.services.gemini_service import generate_reply_text
 
     logger.info(f'AI返信生成タスク開始: reply_id={reply_id}')
@@ -138,6 +166,18 @@ def generate_ai_reply(self, reply_id):
         gemini_user = User.objects.get(role='ai_agent')
     except User.DoesNotExist:
         logger.error('Geminiシステムユーザが見つかりません')
+        return
+
+    # AI使用回数制限チェック
+    requesting_user = None
+    if user_id:
+        try:
+            requesting_user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            pass
+
+    if requesting_user and not AIUsageLog.can_use(requesting_user):
+        logger.warning(f'AI返信使用制限: user_id={user_id}')
         return
 
     # AI返信レコード作成
@@ -173,6 +213,10 @@ def generate_ai_reply(self, reply_id):
         ai_reply.body = reply_text
         ai_reply.ai_generation_status = 'completed'
         ai_reply.save(update_fields=['body', 'ai_generation_status', 'updated_at'])
+
+        # 使用回数をインクリメント
+        if requesting_user:
+            AIUsageLog.increment(requesting_user)
 
         logger.info(f'AI返信生成成功: reply_id={reply_id}')
 

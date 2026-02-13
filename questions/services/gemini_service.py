@@ -1,5 +1,5 @@
 """
-SIRISA Gemini APIサービス
+SIRISA Gemini APIサービス (Vertex AI)
 質問に対するAI回答を生成する
 """
 import re
@@ -8,6 +8,11 @@ import bleach
 from django.conf import settings
 
 logger = logging.getLogger('gemini')
+
+# Vertex AI設定
+VERTEX_PROJECT = 'sirisa'
+VERTEX_LOCATION = 'us-central1'
+VERTEX_MODEL = 'gemini-2.0-flash'
 
 # bleachで許可するHTMLタグと属性
 ALLOWED_TAGS = [
@@ -38,6 +43,20 @@ ALLOWED_STYLES = [
     'border-collapse', 'vertical-align', 'list-style-type',
     'overflow', 'white-space',
 ]
+
+# Vertex AI 初期化フラグ
+_vertex_initialized = False
+
+
+def _init_vertex():
+    """Vertex AI SDKを初期化する（1回のみ）"""
+    global _vertex_initialized
+    if _vertex_initialized:
+        return
+    import vertexai
+    vertexai.init(project=VERTEX_PROJECT, location=VERTEX_LOCATION)
+    _vertex_initialized = True
+    logger.info(f'Vertex AI初期化完了: project={VERTEX_PROJECT}, location={VERTEX_LOCATION}')
 
 
 def strip_code_fences(text):
@@ -75,7 +94,7 @@ def sanitize_html(html_content):
 
 def generate_answer(question_title, question_body, subject_name, body_format='text', media_paths=None, style='normal'):
     """
-    Gemini APIを呼び出して回答を生成する（マルチモーダル対応）
+    Vertex AI (Gemini) を呼び出して回答を生成する（マルチモーダル対応）
 
     Args:
         question_title: 質問タイトル
@@ -86,19 +105,15 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
         style: 'normal' または 'slide'
 
     Returns:
-        サニタイズ済みのHTML回答文字列
+        HTML回答文字列
 
     Raises:
         Exception: API呼び出しに失敗した場合
     """
-    import google.generativeai as genai
+    from vertexai.generative_models import GenerativeModel, Part, GenerationConfig
     from .prompts import get_prompt_for_subject, get_slide_prompt_for_subject
 
-    api_key = settings.GCLOUD_API_KEY
-    if not api_key or api_key == 'your-gemini-api-key-here':
-        raise ValueError('Google Cloud APIキーが設定されていません。')
-
-    genai.configure(api_key=api_key)
+    _init_vertex()
 
     # スタイルに応じたプロンプトを取得
     if style == 'slide':
@@ -121,39 +136,37 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
     # マルチモーダルコンテンツを構成
     content_parts = []
 
-    # メディアファイルをアップロード
+    # メディアファイルを読み込み
     if media_paths:
         for media_info in media_paths:
             try:
-                uploaded = genai.upload_file(
-                    path=media_info['path'],
-                    mime_type=media_info.get('mime'),
-                )
-                content_parts.append(uploaded)
-                logger.info(f'メディアアップロード成功: {media_info["path"]}')
+                mime_type = media_info.get('mime', 'application/octet-stream')
+                with open(media_info['path'], 'rb') as f:
+                    data = f.read()
+                content_parts.append(Part.from_data(data=data, mime_type=mime_type))
+                logger.info(f'メディア読み込み成功: {media_info["path"]}')
             except Exception as e:
-                logger.warning(f'メディアアップロード失敗: {media_info["path"]} - {e}')
+                logger.warning(f'メディア読み込み失敗: {media_info["path"]} - {e}')
 
     if media_paths:
         user_prompt_text += '\n添付されたメディアファイル（画像・音声・動画）も参考にして回答してください。'
 
     content_parts.append(user_prompt_text)
 
-    logger.info(f'Gemini API呼び出し開始: {question_title} ({subject_name}) メディア数={len(media_paths or [])}')
+    logger.info(f'Vertex AI呼び出し開始: {question_title} ({subject_name}) メディア数={len(media_paths or [])}')
 
     try:
-        model = genai.GenerativeModel(
-            model_name='gemini-2.0-flash',
+        model = GenerativeModel(
+            model_name=VERTEX_MODEL,
             system_instruction=system_prompt,
         )
 
         response = model.generate_content(
             content_parts,
-            generation_config=genai.types.GenerationConfig(
+            generation_config=GenerationConfig(
                 temperature=0.7,
                 max_output_tokens=16384,
             ),
-            request_options={'timeout': 120},
         )
 
         if response.text:
@@ -164,27 +177,21 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
             if not any(tag in html_answer for tag in ['<p>', '<h', '<div>', '<ul>', '<ol>', '<svg>', '<style>']):
                 html_answer = f'<div>{html_answer}</div>'
 
-            # サンドボックスiframe内で表示するため、サニタイズせずそのまま返す
-            logger.info(f'Gemini API呼び出し成功: {question_title}')
+            logger.info(f'Vertex AI呼び出し成功: {question_title}')
             return html_answer
         else:
-            raise ValueError('Gemini APIから空のレスポンスが返されました。')
+            raise ValueError('Vertex AIから空のレスポンスが返されました。')
 
     except Exception as e:
-        logger.error(f'Gemini API呼び出しエラー: {question_title} - {e}')
+        logger.error(f'Vertex AI呼び出しエラー: {question_title} - {e}')
         raise
 
 
 def _get_gemini_model():
-    """Geminiモデルのインスタンスを取得する"""
-    import google.generativeai as genai
-
-    api_key = settings.GCLOUD_API_KEY
-    if not api_key:
-        raise ValueError('Google Cloud APIキーが設定されていません。')
-
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(model_name='gemini-2.0-flash')
+    """Geminiモデルのインスタンスを取得する（Vertex AI）"""
+    from vertexai.generative_models import GenerativeModel
+    _init_vertex()
+    return GenerativeModel(model_name=VERTEX_MODEL)
 
 
 def generate_reply_text(question_title, question_body, answer_body,
@@ -195,7 +202,7 @@ def generate_reply_text(question_title, question_body, answer_body,
     Returns:
         HTML形式の返信テキスト
     """
-    import google.generativeai as genai
+    from vertexai.generative_models import GenerationConfig
 
     model = _get_gemini_model()
 
@@ -225,11 +232,10 @@ def generate_reply_text(question_title, question_body, answer_body,
 
     response = model.generate_content(
         prompt,
-        generation_config=genai.types.GenerationConfig(
+        generation_config=GenerationConfig(
             temperature=0.7,
             max_output_tokens=2048,
         ),
-        request_options={'timeout': 60},
     )
 
     if response.text:
@@ -246,7 +252,7 @@ def generate_annotation(selected_text, context_before, context_after,
     Returns:
         HTML形式の説明テキスト
     """
-    import google.generativeai as genai
+    from vertexai.generative_models import GenerationConfig
 
     model = _get_gemini_model()
 
@@ -279,11 +285,10 @@ def generate_annotation(selected_text, context_before, context_after,
 
     response = model.generate_content(
         prompt,
-        generation_config=genai.types.GenerationConfig(
+        generation_config=GenerationConfig(
             temperature=0.5,
             max_output_tokens=1024,
         ),
-        request_options={'timeout': 30},
     )
 
     if response.text:
@@ -298,7 +303,7 @@ def generate_supplements(answer_body, subject_name):
     Returns:
         補足情報のリスト [{'text': '...', 'type': '...', 'explanation': '...'}, ...]
     """
-    import google.generativeai as genai
+    from vertexai.generative_models import GenerationConfig
 
     model = _get_gemini_model()
 
@@ -320,11 +325,10 @@ def generate_supplements(answer_body, subject_name):
 
     response = model.generate_content(
         prompt,
-        generation_config=genai.types.GenerationConfig(
+        generation_config=GenerationConfig(
             temperature=0.3,
             max_output_tokens=2048,
         ),
-        request_options={'timeout': 30},
     )
 
     if response.text:

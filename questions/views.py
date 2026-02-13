@@ -16,7 +16,7 @@ import bleach
 from .models import (
     Question, QuestionMedia, Answer, AnswerMedia,
     Reaction, Subject, QuestionDraft, AnswerDraft,
-    Reply, AIAnnotation,
+    Reply, AIAnnotation, AIUsageLog,
 )
 from .forms import QuestionForm, AnswerForm, ReplyForm
 from .tasks import generate_ai_answer, generate_ai_reply
@@ -106,10 +106,13 @@ class QuestionCreateView(LoginRequiredMixin, View):
                 user=request.user, question__isnull=True
             ).delete()
 
-            # Gemini AI回答を非同期で生成
-            generate_ai_answer.delay(question.pk)
-
-            messages.success(request, '質問を投稿しました。AIが回答を生成中です。')
+            # AI使用回数制限チェック
+            if AIUsageLog.can_use(request.user):
+                # Vertex AI回答を非同期で生成
+                generate_ai_answer.delay(question.pk, request.user.pk)
+                messages.success(request, '質問を投稿しました。AIが回答を生成中です。')
+            else:
+                messages.warning(request, '質問を投稿しました。本日のAI使用回数（100回）に達したため、AI回答は生成されません。')
             return redirect('questions:detail', pk=question.pk)
 
         return render(request, 'questions/create.html', {'form': form})
@@ -637,8 +640,11 @@ class ReplyCreateView(LoginRequiredMixin, View):
 
             # @ai メンションの検出
             if '@ai' in body.lower():
-                # AI返信をCeleryで非同期生成
-                generate_ai_reply.delay(reply.pk)
+                if AIUsageLog.can_use(request.user):
+                    # AI返信をCeleryで非同期生成
+                    generate_ai_reply.delay(reply.pk, request.user.pk)
+                else:
+                    messages.warning(request, '本日のAI使用回数（100回）に達しました。')
 
         return redirect('questions:detail', pk=answer.question.pk)
 
@@ -694,9 +700,17 @@ class AIAnnotationCreateView(LoginRequiredMixin, View):
                 'explanation': existing.explanation,
             })
 
+        # AI使用回数制限チェック
+        if not AIUsageLog.can_use(request.user):
+            return JsonResponse({
+                'error': '本日のAI使用回数（100回）に達しました。',
+                'remaining': 0,
+            }, status=429)
+
         # AI生成
         try:
             from .services.gemini_service import generate_annotation
+            AIUsageLog.increment(request.user)
             explanation = generate_annotation(
                 selected_text=selected_text,
                 context_before=context_before,
@@ -766,8 +780,16 @@ class AutoSupplementView(LoginRequiredMixin, View):
         if not answer_body:
             return JsonResponse({'error': 'body required'}, status=400)
 
+        # AI使用回数制限チェック
+        if not AIUsageLog.can_use(request.user):
+            return JsonResponse({
+                'error': '本日のAI使用回数（100回）に達しました。',
+                'remaining': 0,
+            }, status=429)
+
         try:
             from .services.gemini_service import generate_supplements
+            AIUsageLog.increment(request.user)
             supplements = generate_supplements(answer_body, subject_name)
         except Exception as e:
             logger.error(f'自動補完生成失敗: {e}')

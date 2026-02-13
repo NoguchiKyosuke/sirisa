@@ -5,9 +5,11 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 # Gemini AI サービス ガイドライン
 
 ## SDK
-- `google-generativeai` パッケージを使用
+- `google-cloud-aiplatform` (Vertex AI SDK) を使用
 - モデル: `gemini-2.0-flash`
-- API キー: `settings.GCLOUD_API_KEY`（.env から読み込み）
+- プロジェクト: `sirisa`, ロケーション: `us-central1`
+- 認証: Application Default Credentials（サービスアカウント or `gcloud auth application-default login`）
+- APIキー不要（Vertex AIはIAM認証）
 
 ## プロンプト設計
 - `prompts.py` に `BASE_PROMPT` と `SUBJECT_PROMPTS` を定義
@@ -39,12 +41,21 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 - ユーザ回答は従来通り `bleach.clean()` でサニタイズ
 
 ## エラーハンドリング
-- API キー未設定: ログ警告して空文字返却
+- Vertex AI 初期化は `_init_vertex()` で1回のみ実行
 - API エラー: 例外を raise してCeleryタスク側でリトライ
 - レート制限: Celery のリトライ機構で対応
 
+## AI使用回数制限
+- `AIUsageLog` モデルで1アカウント1日100回までの制限
+- `AIUsageLog.can_use(user)`: 使用可能か判定
+- `AIUsageLog.increment(user)`: API呼び出し成功後にインクリメント
+- `AIUsageLog.remaining(user)`: 残り回数取得
+- 質問投稿時: views.pyで1回チェック→tasks.pyで各スタイル生成前に再チェック→成功時にインクリメント
+- 注釈・補完: views.pyでチェック→成功時にインクリメント
+- 制限超過時: 429レスポンス or 警告メッセージ
+
 ## セキュリティ
-- API キーはコードにハードコードしない
+- Vertex AIはIAM認証を使用（APIキー不要）
 - ユーザー入力をプロンプトに含める際は適切にエスケープ
 - AI生成結果は保存後、表示時に `sanitize_ai_html()` で前処理（タグ閉じ・integrity除去のみ。script/styleは除去しない）
 - AI回答はShadow DOMで表示されるため、CSS/JSはページ全体に影響しない
