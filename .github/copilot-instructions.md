@@ -53,8 +53,9 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 ## セキュリティ
 - IP制限によりアクセス可能なユーザが限定されているため、HTML出力に制限なし
 - AI回答はShadow DOM内に表示（CSS/JSがページ全体に影響しない）
-- `sanitize_ai_html()` で前処理: 未閉じタグ自動閉じ + integrity属性除去（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
+- `sanitize_ai_html()` で前処理: DOCTYPE/html/head/body外殻除去 + KaTeX CDN除去 + integrity属性除去 + 未閉じタグ自動閉じ（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
 - AI回答の `<script>` 内の `document.getElementById` 等はShadow Root経由に自動変換
+- Mermaid.jsはShadow DOM内で`mermaid.render()` APIを使って個別レンダリング（startOnLoad不可）
 - AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
 - 図表はSVG、Chart.js、Mermaid.js、CSSのみの4方式を教科に応じて使い分け
 - AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）

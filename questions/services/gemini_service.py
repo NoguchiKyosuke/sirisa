@@ -109,6 +109,9 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
     # ユーザプロンプトを構成
     user_prompt_text = f"""以下の質問にHTML形式で回答してください。
 
+★重要: 必ずSVG図形、Chart.jsグラフ、またはMermaid.jsダイアグラムを最低1つ含めてください。テキストだけの回答は禁止です。
+★重要: <!DOCTYPE html>や<html><head><body>タグは不要です。<style>と<script>と本文のHTMLだけを出力してください。
+
 【教科】{subject_name}
 【タイトル】{question_title}
 【質問内容】

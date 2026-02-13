@@ -214,6 +214,47 @@ function toggleExpand(btn) {
 const csrfToken = '{{ csrf_token }}';
 let selectedAnnotationData = null;
 
+// ===== Mermaid.js レンダリング（Shadow DOM対応） =====
+// Mermaid.jsはdocument全体を検索するため、Shadow DOM内では動作しない。
+// Shadow DOM内の.mermaid要素を取り出し、一時的にdocument.bodyに配置してレンダリングし、
+// 完了後にShadow DOM内に戻す。
+function renderMermaidInShadow(container, answerId) {
+    var mermaidEls = container.querySelectorAll('.mermaid, pre.mermaid');
+    if (mermaidEls.length === 0) return;
+
+    function doRender() {
+        if (typeof mermaid === 'undefined') return;
+        // mermaidの各要素を個別にレンダリング
+        var promises = [];
+        mermaidEls.forEach(function(el, i) {
+            var code = el.textContent.trim();
+            if (!code) return;
+            var id = 'mermaid-sr' + answerId + '-' + i;
+            promises.push(
+                mermaid.render(id, code).then(function(result) {
+                    el.innerHTML = result.svg;
+                    el.classList.add('mermaid-rendered');
+                }).catch(function(err) {
+                    console.warn('Mermaid render error:', err);
+                })
+            );
+        });
+    }
+
+    // Mermaid.jsが未ロードの場合はCDNから読み込む
+    if (typeof mermaid === 'undefined') {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = function() {
+            mermaid.initialize({ startOnLoad: false, theme: 'default' });
+            doRender();
+        };
+        document.head.appendChild(script);
+    } else {
+        doRender();
+    }
+}
+
 // ===== Shadow DOM 初期化 =====
 function initShadowDOM() {
     document.querySelectorAll('.ai-shadow-host:not([data-shadow-init])').forEach(function(host) {
@@ -247,11 +288,27 @@ function initShadowDOM() {
         // <script>タグを再作成して実行
         // ★ Shadow DOMに<script>を追加しても実行されない（ブラウザ仕様）
         //    → document.head に追加して実行する
+        // ★ Mermaid.jsスクリプトは除外（Shadow DOM内で別途レンダリングする）
         var scripts = Array.from(container.querySelectorAll('script'));
+        var hasMermaidElements = container.querySelectorAll('.mermaid, pre.mermaid').length > 0;
         var loadNext = function(idx) {
-            if (idx >= scripts.length) return;
+            if (idx >= scripts.length) {
+                // 全スクリプト読み込み完了後、Mermaidがあればレンダリング
+                if (hasMermaidElements) {
+                    renderMermaidInShadow(container, answerId);
+                }
+                return;
+            }
             var oldScript = scripts[idx];
             var newScript = document.createElement('script');
+            // Mermaid CDNスクリプトとmermaid.initialize呼び出しはスキップ（別途処理）
+            var isMermaidScript = (oldScript.src && oldScript.src.indexOf('mermaid') !== -1) ||
+                                  (oldScript.textContent && oldScript.textContent.indexOf('mermaid.initialize') !== -1);
+            if (isMermaidScript) {
+                oldScript.remove();
+                loadNext(idx + 1);
+                return;
+            }
             if (oldScript.src) {
                 // 外部スクリプト: onloadで順次読み込み
                 newScript.src = oldScript.src;

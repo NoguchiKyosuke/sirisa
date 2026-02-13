@@ -25,9 +25,16 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 ## 出力処理
 - AI回答・返信・注釈はすべてHTML形式で出力（Markdown不可）
 - AI回答はそのままDBに保存（コードフェンス除去のみ）
-- 表示時に `sanitize_ai_html()` で前処理: 未閉じタグ自動閉じ + integrity属性除去（`<style>`, `<script>` はそのまま維持）
+- 表示時に `sanitize_ai_html()` で前処理:
+  - `<!DOCTYPE>`, `<html>`, `<head>`, `<body>` の外殻タグ除去（Shadow DOM内に配置するため完全なHTML文書不要）
+  - `<meta>`, `<title>` タグ除去（不要）
+  - KaTeX CDNリンク/スクリプト除去（Shadow DOM側で既に読み込み済み）
+  - `integrity`/`crossorigin` 属性除去（Geminiの不正ハッシュ防止）
+  - 未閉じタグ自動閉じ
+  - `<style>`, `<script>` はそのまま維持
 - AI回答はShadow DOM内に表示（CSS/JSがページ全体に影響しない）
 - AI回答内の `document.getElementById` 等はShadow Root経由に自動変換される
+- Mermaid.jsはShadow DOM内では`mermaid.render()` APIを使って個別レンダリング（startOnLoadは動作しない）
 - KaTeX CSSはShadow DOM内に別途読み込み
 - ユーザ回答は従来通り `bleach.clean()` でサニタイズ
 

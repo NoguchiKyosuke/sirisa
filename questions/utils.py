@@ -119,6 +119,30 @@ def sanitize_ai_html(html_str, answer_id):
     result = re.sub(r'\s+integrity=["\'][^"\']*["\']', '', html_str)
     # crossorigin属性もintegrityなしでは不要なため除去
     result = re.sub(r'\s+crossorigin(?:=["\'][^"\']*["\'])?', '', result)
+
+    # Geminiが <!DOCTYPE html><html><head>...<body>...</body></html> 形式で
+    # 出力することがあるが、Shadow DOM内では完全なHTML文書は不要。
+    # <head>内の<style>/<script>/<link>は残しつつ、外殻タグを除去する。
+    result = re.sub(r'<!DOCTYPE[^>]*>', '', result, flags=re.IGNORECASE)
+    # <html ...> と </html> タグを除去
+    result = re.sub(r'</?html[^>]*>', '', result, flags=re.IGNORECASE)
+    # <head> ... </head> の中身を取り出して残す（style/script/linkは維持）
+    head_match = re.search(r'<head[^>]*>(.*?)</head>', result, flags=re.DOTALL | re.IGNORECASE)
+    if head_match:
+        head_content = head_match.group(1)
+        # <meta>と<title>タグは不要なので除去
+        head_content = re.sub(r'<meta[^>]*>', '', head_content, flags=re.IGNORECASE)
+        head_content = re.sub(r'<title[^>]*>.*?</title>', '', head_content, flags=re.DOTALL | re.IGNORECASE)
+        result = result[:head_match.start()] + head_content.strip() + result[head_match.end():]
+    # <body ...> と </body> タグを除去（中身は残す）
+    result = re.sub(r'</?body[^>]*>', '', result, flags=re.IGNORECASE)
+
+    # KaTeXのCDNリンクを除去（Shadow DOM側で既に読み込んでいる）
+    result = re.sub(r'<link[^>]*katex[^>]*>', '', result, flags=re.IGNORECASE)
+    result = re.sub(r'<script[^>]*katex[^>]*>\s*</script>', '', result, flags=re.IGNORECASE)
+    # auto-render onloadスクリプトも除去（Shadow DOM側でKaTeXレンダリングする）
+    result = re.sub(r'<script[^>]*auto-render[^>]*>.*?</script>', '', result, flags=re.DOTALL | re.IGNORECASE)
+
     # 未閉じタグを閉じる
     result = close_unclosed_tags(result)
-    return result
+    return result.strip()
