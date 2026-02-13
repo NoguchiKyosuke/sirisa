@@ -166,7 +166,22 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <!-- KaTeX -->
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <script>
+    // katex.min.js がロードされた後に auto-render を動的に読み込む
+    (function() {
+        var script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js';
+        script.onload = function() {
+            renderMathInElement(document.body, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                ],
+            });
+        };
+        document.head.appendChild(script);
+    })();
+    </script>
     <script>
         // ダークモード
         function toggleDarkMode() {
@@ -191,23 +206,16 @@
             updateDarkModeIcon();
         })();
 
-        // KaTeX自動レンダリング
-        document.addEventListener('DOMContentLoaded', function() {
-            renderMathInElement(document.body, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                ],
-            });
-        });
-        // htmx更新後にもKaTeXを再レンダリング
+        // KaTeX自動レンダリング（htmx更新後）
         document.addEventListener('htmx:afterSwap', function() {
-            renderMathInElement(document.body, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                ],
-            });
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(document.body, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                    ],
+                });
+            }
         });
     </script>
     {% block extra_js %}{% endblock %}

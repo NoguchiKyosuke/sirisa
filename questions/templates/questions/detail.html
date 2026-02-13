@@ -205,87 +205,16 @@ function toggleReaction(answerId, emojiType, btn) {
 // ===== 長い回答の展開/折りたたみ =====
 function toggleExpand(btn) {
     const body = btn.previousElementSibling;
+    if (!body) return;
     body.classList.toggle('answer-collapsed');
     btn.textContent = body.classList.contains('answer-collapsed') ? '展開する' : '折りたたむ';
 }
-
-// ===== サンドボックスiframe高さ自動調整 + テキスト選択 =====
-window.addEventListener('message', function(e) {
-    if (!e.data) return;
-
-    // iframe高さ調整
-    if (e.data.type === 'resize' && e.data.answerId) {
-        const iframe = document.getElementById('sandbox-' + e.data.answerId);
-        if (iframe) {
-            iframe.style.height = (e.data.height + 20) + 'px';
-        }
-    }
-
-    // iframe内テキスト選択検出
-    if (e.data.type === 'textSelected') {
-        const iframe = document.getElementById('sandbox-' + e.data.answerId);
-        if (!iframe) return;
-        const iframeRect = iframe.getBoundingClientRect();
-        const aiBtn = document.getElementById('aiAskBtn');
-        // iframe座標系 → ビューポート座標系に変換
-        const btnLeft = iframeRect.left + e.data.left + (e.data.width / 2) - 60;
-        const btnTop = iframeRect.top + e.data.top - 40;
-        aiBtn.style.left = Math.max(8, btnLeft) + 'px';
-        aiBtn.style.top = Math.max(8, btnTop) + 'px';
-        aiBtn.style.display = 'block';
-
-        selectedAnnotationData = {
-            answerId: String(e.data.answerId),
-            selectedText: e.data.selectedText,
-            contextBefore: e.data.answerBody || '',
-            contextAfter: '',
-            isIframe: true,
-        };
-    }
-
-    // iframe内テキスト選択解除
-    if (e.data.type === 'textDeselected') {
-        document.getElementById('aiAskBtn').style.display = 'none';
-    }
-
-    // iframe内ハイライトテキストからの注釈表示
-    if (e.data.type === 'showAnnotation') {
-        const iframe = document.getElementById('sandbox-' + e.data.answerId);
-        if (!iframe) return;
-        const iframeRect = iframe.getBoundingClientRect();
-        const left = iframeRect.left + e.data.left;
-        const top = iframeRect.top + e.data.top;
-        showAnnotationPopup(e.data.explanation, left + 'px', top + 'px');
-    }
-
-    if (e.data.type === 'hideAnnotation') {
-        hideAnnotationPopup();
-    }
-});
-
-// ダークモード変更をiframeに伝播
-function syncThemeToIframes() {
-    const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-    document.querySelectorAll('iframe[id^="sandbox-"]').forEach(function(iframe) {
-        try {
-            iframe.contentWindow.postMessage({ type: 'theme', dark: isDark }, '*');
-        } catch(e) {}
-    });
-}
-document.addEventListener('DOMContentLoaded', function() {
-    setTimeout(syncThemeToIframes, 1000);
-});
-const origToggle = window.toggleDarkMode;
-window.toggleDarkMode = function() {
-    origToggle();
-    setTimeout(syncThemeToIframes, 100);
-};
 
 // ===== AI注釈機能 =====
 const csrfToken = '{{ csrf_token }}';
 let selectedAnnotationData = null;
 
-// テキスト選択時の「AIに説明を聞く」ボタン（ユーザー回答 - 非iframe）
+// テキスト選択時の「AIに説明を聞く」ボタン
 document.addEventListener('mouseup', function(e) {
     const aiBtn = document.getElementById('aiAskBtn');
     const sel = window.getSelection();
@@ -297,14 +226,12 @@ document.addEventListener('mouseup', function(e) {
     }
 
     const anchorNode = sel.anchorNode;
-    const answerBody = anchorNode ? anchorNode.parentElement?.closest('.answer-body') : null;
+    if (!anchorNode) { aiBtn.style.display = 'none'; return; }
+    const answerBody = anchorNode.nodeType === 3
+        ? anchorNode.parentElement?.closest('.answer-body')
+        : anchorNode.closest?.('.answer-body');
     if (!answerBody) {
         aiBtn.style.display = 'none';
-        return;
-    }
-
-    // iframe内の場合はpostMessageで処理するのでスキップ
-    if (answerBody.querySelector('iframe')) {
         return;
     }
 
@@ -325,8 +252,6 @@ document.addEventListener('mouseup', function(e) {
         selectedText: text,
         contextBefore: answerBody.innerText || '',
         contextAfter: '',
-        isIframe: false,
-        range: range.cloneRange(),
     };
 });
 
@@ -369,12 +294,7 @@ function askAIAboutSelection() {
     .then(data => {
         hideAnnotationPopup();
         if (data.explanation) {
-            // テキストをハイライトし、ホバーで注釈を表示
-            highlightSelection(
-                selectedAnnotationData,
-                data.explanation,
-                data.annotation_id
-            );
+            highlightSelection(selectedAnnotationData, data.explanation, data.annotation_id);
         } else if (data.error) {
             showAnnotationPopup('<div class="text-danger">' + data.error + '</div>', btnLeft, btnTop);
         }
@@ -385,43 +305,38 @@ function askAIAboutSelection() {
 }
 
 function highlightSelection(annotationData, explanation, annotationId) {
-    if (annotationData.isIframe) {
-        // iframe内のテキストをハイライト
-        const iframe = document.getElementById('sandbox-' + annotationData.answerId);
-        if (iframe) {
-            iframe.contentWindow.postMessage({
-                type: 'highlightText',
-                selectedText: annotationData.selectedText,
-                explanation: explanation,
-                annotationId: annotationId,
-            }, '*');
-        }
-    } else {
-        // 直接DOMのテキストをハイライト
-        const answerBody = document.querySelector(`.answer-body[data-answer-id="${annotationData.answerId}"]`);
-        if (!answerBody) return;
-        const walker = document.createTreeWalker(answerBody, NodeFilter.SHOW_TEXT, null, false);
-        let node;
-        while (node = walker.nextNode()) {
-            const idx = node.textContent.indexOf(annotationData.selectedText);
-            if (idx >= 0) {
-                const range = document.createRange();
-                range.setStart(node, idx);
-                range.setEnd(node, idx + annotationData.selectedText.length);
-                const span = document.createElement('span');
-                span.className = 'ai-annotated';
-                span.dataset.annotationId = annotationId || '';
-                span.dataset.explanation = explanation;
-                span.addEventListener('mouseenter', function(ev) {
-                    const r = this.getBoundingClientRect();
-                    showAnnotationPopup(this.dataset.explanation, r.left + 'px', (r.bottom + 4) + 'px');
+    const answerBody = document.querySelector(`.answer-body[data-answer-id="${annotationData.answerId}"]`);
+    if (!answerBody) return;
+    const walker = document.createTreeWalker(answerBody, NodeFilter.SHOW_TEXT, null, false);
+    let node;
+    while (node = walker.nextNode()) {
+        const idx = node.textContent.indexOf(annotationData.selectedText);
+        if (idx >= 0) {
+            const range = document.createRange();
+            range.setStart(node, idx);
+            range.setEnd(node, idx + annotationData.selectedText.length);
+            const span = document.createElement('span');
+            span.className = 'ai-annotated';
+            span.dataset.annotationId = annotationId || '';
+            span.dataset.explanation = explanation;
+            span.addEventListener('mouseenter', function(ev) {
+                const r = this.getBoundingClientRect();
+                showAnnotationPopup(this.dataset.explanation, r.left + 'px', (r.bottom + 4) + 'px');
+            });
+            span.addEventListener('mouseleave', function() {
+                hideAnnotationPopup();
+            });
+            range.surroundContents(span);
+            // KaTeX再レンダリング
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(span, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                    ],
                 });
-                span.addEventListener('mouseleave', function() {
-                    hideAnnotationPopup();
-                });
-                range.surroundContents(span);
-                break;
             }
+            break;
         }
     }
 }
@@ -503,5 +418,19 @@ function showAnnotationPopup(html, left, top) {
 function hideAnnotationPopup() {
     document.getElementById('annotationPopup').style.display = 'none';
 }
+
+// ページ読込後にAI回答内のKaTeXを再レンダリング
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.answer-body').forEach(function(el) {
+        if (typeof renderMathInElement !== 'undefined') {
+            renderMathInElement(el, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false},
+                ],
+            });
+        }
+    });
+});
 </script>
 {% endblock %}

@@ -18,8 +18,8 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 ## 出力処理
 - AI回答・返信・注釈はすべてHTML形式で出力（Markdown不可）
 - AI回答はサニタイズせずそのままDBに保存（コードフェンス除去のみ）
-- セキュリティは content.sirisa.net のサンドボックスiframe（sandbox="allow-scripts allow-same-origin"）で確保
-- iframeテンプレートが既にKaTeXを読込むため、AI生成本文中の重複KaTeXタグを `_strip_duplicate_resources` で自動除去
+- AI回答はページ内に直接表示（iframe不使用、制限なし）
+- IP制限によりアクセスが限定されているため、HTML出力に一切制限を設けない
 - ユーザ回答は従来通り `bleach.clean()` でサニタイズ
 
 ## エラーハンドリング

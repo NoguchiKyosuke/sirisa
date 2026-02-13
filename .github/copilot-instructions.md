@@ -51,18 +51,13 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - フォームには Bootstrap 5 クラスを付与
 
 ## セキュリティ
-- ユーザ回答のHTMLは `bleach` でサニタイズ
-- AI回答はサニタイズせず、content.sirisa.net のサンドボックスiframe内で隔離表示
+- IP制限によりアクセス可能なユーザが限定されているため、HTML出力に制限なし
+- AI回答はサニタイズせずページ内に直接表示（iframe不使用）
 - AI回答: `<style>`, `<script>`, `<svg>`, CSSアニメーション、JS を制限なく許可
+- ユーザ回答のHTMLは `bleach` でサニタイズ
 - ファイルアップロードは100MB制限
 - 本番環境は IP 制限あり（Nginx）
 - `CSRF_COOKIE_HTTPONLY = True`
-## サンドボックスiframeセキュリティ
-- iframeの sandbox属性: `allow-scripts allow-same-origin`
-- `allow-same-origin` はcontent.sirisa.netのオリジンを使用（セッション/Cookieなしなので安全）
-- CSPヘッダーでscript-src, style-srcをCDNドメインに制限
-- AI生成本文の重複KaTeXタグを自動除去 (`_strip_duplicate_resources`)
-- 外部リンクはクッションページ経由 (`_rewrite_links`)、CDNドメインは除外
 ## テスト
 - `pytest` + `pytest-django` を使用
 - テストファイルは各アプリの `tests/` ディレクトリに配置

@@ -355,7 +355,10 @@ class QuestionDetailView(LoginRequiredMixin, View):
 
         # 各回答の本文もHTML変換し、リアクション情報を付与
         for answer in answers:
-            answer.rendered_body = render_body(answer.body, answer.body_format)
+            if answer.is_ai_generated:
+                answer.rendered_body = answer.body  # AI回答は制限なし
+            else:
+                answer.rendered_body = render_body(answer.body, answer.body_format)
             answer.sandbox_token = generate_token(answer.pk)
             # ユーザのリアクション種別一覧
             answer.user_reactions = [
@@ -547,7 +550,10 @@ class AnswerStatusAPIView(LoginRequiredMixin, View):
 
         if answer.ai_generation_status == 'completed':
             # 完了した場合、回答カードの部分テンプレートを返す
-            answer.rendered_body = render_body(answer.body, answer.body_format)
+            if answer.is_ai_generated:
+                answer.rendered_body = answer.body  # AI回答は制限なし
+            else:
+                answer.rendered_body = render_body(answer.body, answer.body_format)
             from content.views import generate_token
             answer.sandbox_token = generate_token(answer.pk)
             answer.user_reactions = []
