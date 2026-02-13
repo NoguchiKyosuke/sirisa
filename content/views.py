@@ -45,7 +45,9 @@ class SandboxedAnswerView(View):
             from questions.utils import render_body
             body_html = render_body(answer.body, answer.body_format)
 
-        # 外部リンクをクッションページ経由に書き換え
+        # AI生成本文から重複CDNリソースを除去 + 外部リンクをクッションページ経由に書き換え
+        if answer.is_ai_generated:
+            body_html = self._strip_duplicate_resources(body_html)
         body_html = self._rewrite_links(body_html)
 
         html = self._build_html(body_html, pk)
@@ -155,12 +157,34 @@ window.parent.postMessage({{type:'textDeselected'}},'*');
 </body>
 </html>"""
 
+    def _strip_duplicate_resources(self, body_html):
+        """AI生成本文から重複するKaTeX等のCDNリソース読込を除去"""
+        # KaTeX CSS <link>タグ除去 (テンプレートで既に読込済み)
+        body_html = re.sub(r'<link[^>]*katex[^>]*/?>',
+                           '', body_html, flags=re.IGNORECASE)
+        # KaTeX <script>タグ除去 (テンプレートで既に読込済み)
+        body_html = re.sub(r'<script[^>]*katex[^>]*>.*?</script>',
+                           '', body_html, flags=re.IGNORECASE | re.DOTALL)
+        # integrity / crossorigin 属性除去 (不正値によるエラー防止)
+        body_html = re.sub(r'\s+integrity=["\'][^"\']*["\']',
+                           '', body_html, flags=re.IGNORECASE)
+        body_html = re.sub(r'\s+crossorigin(?:=["\'][^"\']*["\'])?',
+                           '', body_html, flags=re.IGNORECASE)
+        return body_html
+
     def _rewrite_links(self, html):
-        """外部リンクをクッションページ経由に書き換える"""
+        """外部リンクをクッションページ経由に書き換える (CDNドメインは除外)"""
+        SAFE_DOMAINS = [
+            'sirisa.net', 'cdn.jsdelivr.net', 'cdnjs.cloudflare.com',
+            'fonts.googleapis.com', 'fonts.gstatic.com',
+            'unpkg.com', 'stackpath.bootstrapcdn.com',
+        ]
         def replace_href(match):
             url = match.group(2)
             quote = match.group(1)
-            if url.startswith('/') or url.startswith('#') or 'sirisa.net' in url:
+            if url.startswith('/') or url.startswith('#'):
+                return match.group(0)
+            if any(domain in url for domain in SAFE_DOMAINS):
                 return match.group(0)
             encoded = urllib.parse.quote(url, safe='')
             return f'href={quote}/cushion/?url={encoded}{quote}'

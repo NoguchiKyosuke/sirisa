@@ -16,8 +16,10 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 - プロンプトで `<style>`, `<script>`, `<svg>` の使用を推奨（CSSアニメーション、SVG図形、JSインタラクション）
 
 ## 出力処理
+- AI回答・返信・注釈はすべてHTML形式で出力（Markdown不可）
 - AI回答はサニタイズせずそのままDBに保存（コードフェンス除去のみ）
-- セキュリティは content.sirisa.net のサンドボックスiframe（sandbox="allow-scripts"）で確保
+- セキュリティは content.sirisa.net のサンドボックスiframe（sandbox="allow-scripts allow-same-origin"）で確保
+- iframeテンプレートが既にKaTeXを読込むため、AI生成本文中の重複KaTeXタグを `_strip_duplicate_resources` で自動除去
 - ユーザ回答は従来通り `bleach.clean()` でサニタイズ
 
 ## エラーハンドリング

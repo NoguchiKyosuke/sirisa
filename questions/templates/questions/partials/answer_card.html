@@ -23,7 +23,7 @@
         <div class="answer-body" data-answer-id="{{ answer.pk }}">
             <iframe
                 src="https://{{ content_domain|default:'content.sirisa.net' }}/content/answer/{{ answer.pk }}/?token={{ answer.sandbox_token }}"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin"
                 class="w-100 border-0"
                 id="sandbox-{{ answer.pk }}"
                 style="min-height:100px;overflow:hidden;"
