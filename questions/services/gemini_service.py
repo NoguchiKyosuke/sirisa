@@ -186,14 +186,14 @@ def generate_reply_text(question_title, question_body, answer_body,
     @aiメンション付き返信に対してAI返信テキストを生成する
 
     Returns:
-        Markdown形式の返信テキスト
+        HTML形式の返信テキスト
     """
     import google.generativeai as genai
 
     model = _get_gemini_model()
 
     prompt = f"""あなたは高校生の学習を支援する教師AIです。
-以下の質問・回答スレッドの文脈を踏まえて、ユーザの返信に対して丁寧にMarkdown形式で回答してください。
+以下の質問・回答スレッドの文脈を踏まえて、ユーザの返信に対して丁寧にHTML形式で回答してください。
 教科: {subject_name}
 
 【元の質問】
@@ -207,8 +207,14 @@ def generate_reply_text(question_title, question_body, answer_body,
 {thread_context}
 
 上記のスレッドに対して、ユーザのメッセージに丁寧に回答してください。
-数式がある場合はKaTeX記法（$...$）を使ってください。
-回答は日本語で、Markdown形式で出力してください。"""
+
+【出力ルール】
+- 回答はHTML形式で出力してください。マークダウンのコードフェンス（```html...```）は使わないでください。
+- 数式がある場合はKaTeX記法（$...$）を使ってください。
+- 回答は日本語で行ってください。
+- 返信なので簡潔に要点をまとめてください。
+- <p>、<strong>、<em>、<ul>、<li>などのHTMLタグを使ってください。
+- インラインstyle属性で色やボックスを使い、わかりやすくしてください。"""
 
     response = model.generate_content(
         prompt,
@@ -220,17 +226,18 @@ def generate_reply_text(question_title, question_body, answer_body,
     )
 
     if response.text:
-        return response.text
+        return strip_code_fences(response.text)
     raise ValueError('AI返信で空のレスポンスが返されました。')
 
 
 def generate_annotation(selected_text, context_before, context_after,
-                        annotation_type, subject_name):
+                        annotation_type, subject_name,
+                        question_title='', question_body=''):
     """
     数式導出や単語説明のAI注釈を生成する
 
     Returns:
-        Markdown形式の説明テキスト
+        HTML形式の説明テキスト
     """
     import google.generativeai as genai
 
@@ -246,18 +253,21 @@ def generate_annotation(selected_text, context_before, context_after,
 
 {task_desc}。
 
-【対象テキスト】
+【元の質問】
+タイトル: {question_title}
+{question_body}
+
+【選択部分を含む文章の全体】
+{context_before}
+
+【対象テキスト（ユーザが選択した部分）】
 {selected_text}
 
-【前後の文脈】
-前: {context_before}
-後: {context_after}
-
 以下のルールで回答してください:
-- Markdown形式で出力してください
+- HTML形式で出力してください。マークダウンのコードフェンス（```html...```）は使わないでください。
 - 数式がある場合はKaTeX記法（$...$）を使ってください
-- わかりやすく丁寧に説明してください
-- 簡潔にまとめてください（ポップアップで表示するため）
+- ポップアップ表示用なので要約して簡潔にまとめてください（3〜5文程度）
+- <p>、<strong>、<em>、<mark>タグとインラインstyle属性を使ってください
 - 回答は日本語で行ってください"""
 
     response = model.generate_content(
@@ -270,7 +280,7 @@ def generate_annotation(selected_text, context_before, context_after,
     )
 
     if response.text:
-        return response.text
+        return strip_code_fences(response.text)
     raise ValueError('AI注釈で空のレスポンスが返されました。')
 
 

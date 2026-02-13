@@ -106,6 +106,8 @@
                         </div>
                         {% if reply.is_ai_generated and reply.ai_generation_status == 'pending' %}
                         <div class="text-muted small"><i class="bi bi-hourglass-split"></i> AI返信を生成中...</div>
+                        {% elif reply.is_ai_generated %}
+                        <div class="small mt-1 ai-reply-body">{{ reply.body|safe }}</div>
                         {% else %}
                         <div class="small mt-1">{{ reply.body|linebreaksbr }}</div>
                         {% endif %}

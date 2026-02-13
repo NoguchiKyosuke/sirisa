@@ -697,6 +697,8 @@ class AIAnnotationCreateView(LoginRequiredMixin, View):
                 context_after=context_after,
                 annotation_type=annotation_type,
                 subject_name=answer.question.display_subject,
+                question_title=answer.question.title,
+                question_body=answer.question.body or '',
             )
         except Exception as e:
             logger.error(f'AI注釈生成失敗: {e}')

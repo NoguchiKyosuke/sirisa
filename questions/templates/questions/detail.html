@@ -40,6 +40,15 @@
 .ai-ask-btn:hover {
     opacity: 0.9;
 }
+.ai-annotated {
+    background: #e8d5f5;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: background 0.2s;
+}
+.ai-annotated:hover {
+    background: #d4b8e8;
+}
 </style>
 {% endblock %}
 
@@ -163,7 +172,7 @@
 
 <!-- テキスト選択時のAI質問ボタン -->
 <button class="ai-ask-btn" id="aiAskBtn" onclick="askAIAboutSelection()">
-    <i class="bi bi-robot"></i> AIに意味を聞く
+    <i class="bi bi-robot"></i> AIに説明を聞く
 </button>
 {% endblock %}
 
@@ -200,13 +209,57 @@ function toggleExpand(btn) {
     btn.textContent = body.classList.contains('answer-collapsed') ? '展開する' : '折りたたむ';
 }
 
-// ===== サンドボックスiframe高さ自動調整 =====
+// ===== サンドボックスiframe高さ自動調整 + テキスト選択 =====
 window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'resize' && e.data.answerId) {
+    if (!e.data) return;
+
+    // iframe高さ調整
+    if (e.data.type === 'resize' && e.data.answerId) {
         const iframe = document.getElementById('sandbox-' + e.data.answerId);
         if (iframe) {
             iframe.style.height = (e.data.height + 20) + 'px';
         }
+    }
+
+    // iframe内テキスト選択検出
+    if (e.data.type === 'textSelected') {
+        const iframe = document.getElementById('sandbox-' + e.data.answerId);
+        if (!iframe) return;
+        const iframeRect = iframe.getBoundingClientRect();
+        const aiBtn = document.getElementById('aiAskBtn');
+        // iframe座標系 → ビューポート座標系に変換
+        const btnLeft = iframeRect.left + e.data.left + (e.data.width / 2) - 60;
+        const btnTop = iframeRect.top + e.data.top - 40;
+        aiBtn.style.left = Math.max(8, btnLeft) + 'px';
+        aiBtn.style.top = Math.max(8, btnTop) + 'px';
+        aiBtn.style.display = 'block';
+
+        selectedAnnotationData = {
+            answerId: String(e.data.answerId),
+            selectedText: e.data.selectedText,
+            contextBefore: e.data.answerBody || '',
+            contextAfter: '',
+            isIframe: true,
+        };
+    }
+
+    // iframe内テキスト選択解除
+    if (e.data.type === 'textDeselected') {
+        document.getElementById('aiAskBtn').style.display = 'none';
+    }
+
+    // iframe内ハイライトテキストからの注釈表示
+    if (e.data.type === 'showAnnotation') {
+        const iframe = document.getElementById('sandbox-' + e.data.answerId);
+        if (!iframe) return;
+        const iframeRect = iframe.getBoundingClientRect();
+        const left = iframeRect.left + e.data.left;
+        const top = iframeRect.top + e.data.top;
+        showAnnotationPopup(e.data.explanation, left + 'px', top + 'px');
+    }
+
+    if (e.data.type === 'hideAnnotation') {
+        hideAnnotationPopup();
     }
 });
 
@@ -219,11 +272,9 @@ function syncThemeToIframes() {
         } catch(e) {}
     });
 }
-// 初回同期
 document.addEventListener('DOMContentLoaded', function() {
     setTimeout(syncThemeToIframes, 1000);
 });
-// テーマ変更時
 const origToggle = window.toggleDarkMode;
 window.toggleDarkMode = function() {
     origToggle();
@@ -234,13 +285,12 @@ window.toggleDarkMode = function() {
 const csrfToken = '{{ csrf_token }}';
 let selectedAnnotationData = null;
 
-// テキスト選択時の「AIに意味を聞く」ボタン
+// テキスト選択時の「AIに説明を聞く」ボタン（ユーザー回答 - 非iframe）
 document.addEventListener('mouseup', function(e) {
     const aiBtn = document.getElementById('aiAskBtn');
     const sel = window.getSelection();
     const text = sel.toString().trim();
 
-    // 回答本文内の選択のみ対象
     if (text.length < 2 || text.length > 500) {
         aiBtn.style.display = 'none';
         return;
@@ -253,24 +303,30 @@ document.addEventListener('mouseup', function(e) {
         return;
     }
 
+    // iframe内の場合はpostMessageで処理するのでスキップ
+    if (answerBody.querySelector('iframe')) {
+        return;
+    }
+
     const answerId = answerBody.dataset.answerId;
     if (!answerId) {
         aiBtn.style.display = 'none';
         return;
     }
 
-    // ボタン位置を選択位置近くに
     const range = sel.getRangeAt(0);
     const rect = range.getBoundingClientRect();
-    aiBtn.style.left = (rect.left + rect.width / 2 - 60) + 'px';
-    aiBtn.style.top = (rect.top - 40 + window.scrollY) + 'px';
+    aiBtn.style.left = Math.max(8, rect.left + rect.width / 2 - 60) + 'px';
+    aiBtn.style.top = Math.max(8, rect.top - 40) + 'px';
     aiBtn.style.display = 'block';
 
     selectedAnnotationData = {
         answerId: answerId,
         selectedText: text,
-        contextBefore: '',
+        contextBefore: answerBody.innerText || '',
         contextAfter: '',
+        isIframe: false,
+        range: range.cloneRange(),
     };
 });
 
@@ -286,11 +342,13 @@ document.addEventListener('mousedown', function(e) {
 function askAIAboutSelection() {
     if (!selectedAnnotationData) return;
     const aiBtn = document.getElementById('aiAskBtn');
+    const btnLeft = aiBtn.style.left;
+    const btnTop = aiBtn.style.top;
     aiBtn.style.display = 'none';
 
     showAnnotationPopup(
         '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> AIが解説を生成中...</div>',
-        aiBtn.style.left, aiBtn.style.top
+        btnLeft, btnTop
     );
 
     fetch('{% url "questions:annotation_create" %}', {
@@ -309,15 +367,63 @@ function askAIAboutSelection() {
     })
     .then(r => r.json())
     .then(data => {
+        hideAnnotationPopup();
         if (data.explanation) {
-            showAnnotationPopup(renderMarkdown(data.explanation));
+            // テキストをハイライトし、ホバーで注釈を表示
+            highlightSelection(
+                selectedAnnotationData,
+                data.explanation,
+                data.annotation_id
+            );
         } else if (data.error) {
-            showAnnotationPopup('<div class="text-danger">' + data.error + '</div>');
+            showAnnotationPopup('<div class="text-danger">' + data.error + '</div>', btnLeft, btnTop);
         }
     })
     .catch(err => {
-        showAnnotationPopup('<div class="text-danger">エラーが発生しました</div>');
+        showAnnotationPopup('<div class="text-danger">エラーが発生しました</div>', btnLeft, btnTop);
     });
+}
+
+function highlightSelection(annotationData, explanation, annotationId) {
+    if (annotationData.isIframe) {
+        // iframe内のテキストをハイライト
+        const iframe = document.getElementById('sandbox-' + annotationData.answerId);
+        if (iframe) {
+            iframe.contentWindow.postMessage({
+                type: 'highlightText',
+                selectedText: annotationData.selectedText,
+                explanation: explanation,
+                annotationId: annotationId,
+            }, '*');
+        }
+    } else {
+        // 直接DOMのテキストをハイライト
+        const answerBody = document.querySelector(`.answer-body[data-answer-id="${annotationData.answerId}"]`);
+        if (!answerBody) return;
+        const walker = document.createTreeWalker(answerBody, NodeFilter.SHOW_TEXT, null, false);
+        let node;
+        while (node = walker.nextNode()) {
+            const idx = node.textContent.indexOf(annotationData.selectedText);
+            if (idx >= 0) {
+                const range = document.createRange();
+                range.setStart(node, idx);
+                range.setEnd(node, idx + annotationData.selectedText.length);
+                const span = document.createElement('span');
+                span.className = 'ai-annotated';
+                span.dataset.annotationId = annotationId || '';
+                span.dataset.explanation = explanation;
+                span.addEventListener('mouseenter', function(ev) {
+                    const r = this.getBoundingClientRect();
+                    showAnnotationPopup(this.dataset.explanation, r.left + 'px', (r.bottom + 4) + 'px');
+                });
+                span.addEventListener('mouseleave', function() {
+                    hideAnnotationPopup();
+                });
+                range.surroundContents(span);
+                break;
+            }
+        }
+    }
 }
 
 // 数式クリックで導出を表示
@@ -331,14 +437,13 @@ document.addEventListener('click', function(e) {
     const answerId = answerBody.dataset.answerId;
     if (!answerId) return;
 
-    // KaTeX要素のテキストを取得
     const formulaText = katexEl.textContent.trim();
     if (!formulaText) return;
 
     const rect = katexEl.getBoundingClientRect();
     showAnnotationPopup(
         '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> 数式の導出を生成中...</div>',
-        rect.left + 'px', (rect.bottom + window.scrollY + 8) + 'px'
+        rect.left + 'px', (rect.bottom + 8) + 'px'
     );
 
     fetch('{% url "questions:annotation_create" %}', {
@@ -351,14 +456,14 @@ document.addEventListener('click', function(e) {
             answer_id: answerId,
             selected_text: formulaText,
             type: 'formula',
-            context_before: '',
+            context_before: answerBody.innerText || '',
             context_after: '',
         }),
     })
     .then(r => r.json())
     .then(data => {
         if (data.explanation) {
-            showAnnotationPopup(renderMarkdown(data.explanation));
+            showAnnotationPopup(data.explanation);
         } else if (data.error) {
             showAnnotationPopup('<div class="text-danger">' + data.error + '</div>');
         }
@@ -390,20 +495,13 @@ function showAnnotationPopup(html, left, top) {
         popup.style.left = (window.innerWidth - rect.width - 16) + 'px';
     }
     if (rect.left < 0) popup.style.left = '16px';
+    if (rect.bottom > window.innerHeight) {
+        popup.style.top = (window.innerHeight - rect.height - 16) + 'px';
+    }
 }
 
 function hideAnnotationPopup() {
     document.getElementById('annotationPopup').style.display = 'none';
-}
-
-// 簡易マークダウンレンダリング
-function renderMarkdown(text) {
-    return text
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
 }
 </script>
 {% endblock %}

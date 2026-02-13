@@ -103,6 +103,52 @@ if(e.data&&e.data.type==='theme'){{
 document.documentElement.style.setProperty('--text-color',e.data.dark?'#e0e0e0':'#333');
 document.documentElement.style.setProperty('--bg-color',e.data.dark?'#1a1a2e':'transparent');
 }}
+if(e.data&&e.data.type==='highlightText'){{
+var sel=e.data.selectedText;
+if(!sel)return;
+var walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false);
+var node;
+while(node=walker.nextNode()){{
+var idx=node.textContent.indexOf(sel);
+if(idx>=0){{
+var range=document.createRange();
+range.setStart(node,idx);
+range.setEnd(node,idx+sel.length);
+var span=document.createElement('span');
+span.className='ai-annotated';
+span.style.cssText='background:#e8d5f5;cursor:pointer;border-radius:2px;transition:background 0.2s';
+span.dataset.annotationId=e.data.annotationId||'';
+span.dataset.explanation=e.data.explanation||'';
+span.addEventListener('mouseenter',function(ev){{
+var r=this.getBoundingClientRect();
+window.parent.postMessage({{type:'showAnnotation',explanation:this.dataset.explanation,left:r.left,top:r.bottom+4,answerId:{pk}}},'*');
+}});
+span.addEventListener('mouseleave',function(){{
+window.parent.postMessage({{type:'hideAnnotation'}},'*');
+}});
+range.surroundContents(span);
+notifyHeight();
+break;
+}}
+}}
+}}
+}});
+// テキスト選択検出
+document.addEventListener('mouseup',function(e){{
+var sel=window.getSelection();
+var text=sel.toString().trim();
+if(text.length>=2&&text.length<=500){{
+var range=sel.getRangeAt(0);
+var rect=range.getBoundingClientRect();
+window.parent.postMessage({{type:'textSelected',selectedText:text,answerId:{pk},answerBody:document.body.innerText,left:rect.left,top:rect.top,width:rect.width}},'*');
+}}else{{
+window.parent.postMessage({{type:'textDeselected'}},'*');
+}}
+}});
+document.addEventListener('mousedown',function(e){{
+if(!window.getSelection().toString().trim()){{
+window.parent.postMessage({{type:'textDeselected'}},'*');
+}}
 }});
 }});
 </script>
