@@ -277,14 +277,19 @@ function initShadowDOM() {
         loadNext(0);
 
         // KaTeX レンダリング（Shadow DOM内）
-        if (typeof renderMathInElement !== 'undefined') {
-            renderMathInElement(container, {
-                delimiters: [
-                    {left: '$$', right: '$$', display: true},
-                    {left: '$', right: '$', display: false},
-                ],
-            });
-        }
+        // auto-render.min.js が未ロードの場合はリトライする
+        (function renderShadowKaTeX(el, retries) {
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(el, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                    ],
+                });
+            } else if (retries > 0) {
+                setTimeout(function() { renderShadowKaTeX(el, retries - 1); }, 300);
+            }
+        })(container, 20);
 
         // テキスト選択リスナー（Shadow DOM内）
         container.addEventListener('mouseup', function(e) {
