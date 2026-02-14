@@ -258,11 +258,17 @@ function sanitizeMermaidCode(code) {
     // Mermaid.jsでパースエラーを起こす文字をエスケープする
     // ノードラベル内の丸括弧 () や中括弧 {} をテキストノード用の引用符で囲む
     // 例: A[圧縮 (情報の損失)] → A["圧縮 (情報の損失)"]
-    // 例: A[a_{n+1} = ...] → A["a_{n+1} = ..."]
+    // 例: subgraph 全体でn個を選ぶ (p+q+r = n) → subgraph "全体でn個を選ぶ (p+q+r = n)"
     var lines = code.split('\n');
     var result = [];
     for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
+        // subgraph ラベル内の ( ) { } をエスケープ
+        line = line.replace(/^(\s*subgraph\s+)(.*[\(\)\{\}].*)$/g, function(match, prefix, label) {
+            label = label.trim();
+            if (/^".*"$/.test(label)) return match;
+            return prefix + '"' + label.replace(/"/g, '#quot;') + '"';
+        });
         // ノードラベルを検出して引用符で囲む
         // パターン: ID[...] 形式のラベル内に ( ) や { } がある場合
         line = line.replace(/(\w+)\[([^\]]*[\(\{\}][^\]]*)\]/g, function(match, id, label) {
@@ -473,12 +479,25 @@ function initShadowDOM() {
                 while ((fm = funcDeclRegex.exec(code)) !== null) {
                     funcExports.push('window["' + fm[1] + '"]=' + fm[1] + ';');
                 }
+                // var/let/const による関数代入もエクスポート
+                // 例: const showTab = function(name) { ... }
+                // 例: var toggleView = (id) => { ... }
+                var varFuncRegex = /\b(?:var|let|const)\s+([a-zA-Z_$][\w$]*)\s*=\s*(?:function|\(|[a-zA-Z_$][\w$]*\s*=>)/g;
+                while ((fm = varFuncRegex.exec(code)) !== null) {
+                    if (funcExports.indexOf('window["' + fm[1] + '"]=' + fm[1] + ';') === -1) {
+                        funcExports.push('window["' + fm[1] + '"]=' + fm[1] + ';');
+                    }
+                }
                 if (funcExports.length > 0) {
                     var exportBlock = '\n' + funcExports.join('\n') + '\n';
-                    // IIFE末尾 })(); の直前に挿入（IIFE内スコープで関数が参照可能）
-                    var iifeEndPattern = /(\}\s*\)\s*\(\s*\)\s*;?\s*)$/;
-                    if (iifeEndPattern.test(code)) {
-                        code = code.replace(iifeEndPattern, exportBlock + '$1');
+                    // 各種IIFE末尾パターンの直前に挿入（IIFE内スコープで関数が参照可能）
+                    // })();  }());  })()  }())
+                    var iifeEnd1 = /(\}\s*\)\s*\(\s*\)\s*;?\s*)$/;  // })(); or })()
+                    var iifeEnd2 = /(\}\s*\(\s*\)\s*\)\s*;?\s*)$/;  // }()); or }())
+                    if (iifeEnd1.test(code)) {
+                        code = code.replace(iifeEnd1, exportBlock + '$1');
+                    } else if (iifeEnd2.test(code)) {
+                        code = code.replace(iifeEnd2, exportBlock + '$1');
                     } else {
                         code += exportBlock;
                     }
@@ -502,6 +521,7 @@ function initShadowDOM() {
                         {left: '$$', right: '$$', display: true},
                         {left: '$', right: '$', display: false},
                     ],
+                    strict: false,
                 });
             } else if (retries > 0) {
                 setTimeout(function() { renderShadowKaTeX(el, retries - 1); }, 300);
@@ -874,6 +894,7 @@ function highlightSelection(annotationData, explanation, annotationId) {
                         {left: '$$', right: '$$', display: true},
                         {left: '$', right: '$', display: false},
                     ],
+                    strict: false,
                 });
             }
         } catch (e) {
@@ -972,6 +993,7 @@ function showAnnotationPopup(html, left, top) {
                 {left: '$$', right: '$$', display: true},
                 {left: '$', right: '$', display: false},
             ],
+            strict: false,
         });
     }
     // ポップアップが画面外に出ないよう調整
@@ -1027,6 +1049,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     {left: '$$', right: '$$', display: true},
                     {left: '$', right: '$', display: false},
                 ],
+                strict: false,
             });
         }
     });
@@ -1129,6 +1152,7 @@ function submitReplyForm(form) {
                         {left: '$$', right: '$$', display: true},
                         {left: '$', right: '$', display: false},
                     ],
+                    strict: false,
                 });
             }
         }
@@ -1178,6 +1202,7 @@ function pollReplyStatus(replyId) {
                             {left: '$$', right: '$$', display: true},
                             {left: '$', right: '$', display: false},
                         ],
+                        strict: false,
                     });
                 }
             } else if (data.status === 'failed') {
@@ -1246,6 +1271,7 @@ document.addEventListener('htmx:afterSwap', function() {
                     {left: '$$', right: '$$', display: true},
                     {left: '$', right: '$', display: false},
                 ],
+                strict: false,
             });
         }
     });
