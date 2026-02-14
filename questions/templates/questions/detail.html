@@ -49,6 +49,36 @@
 .ai-annotated:hover {
     background: #d4b8e8;
 }
+/* カスタム右クリックメニュー */
+.custom-context-menu {
+    position: fixed;
+    z-index: 1100;
+    background: var(--bs-body-bg, white);
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+    padding: 4px 0;
+    min-width: 200px;
+    display: none;
+    font-size: 0.9rem;
+}
+.custom-context-menu .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    color: var(--bs-body-color, #212529);
+    transition: background 0.15s;
+    user-select: none;
+}
+.custom-context-menu .menu-item:hover {
+    background: linear-gradient(135deg, #667eea20, #764ba220);
+}
+.custom-context-menu .menu-item i {
+    color: #667eea;
+    font-size: 1rem;
+}
 </style>
 {% endblock %}
 
@@ -174,6 +204,13 @@
 <button class="ai-ask-btn" id="aiAskBtn" onclick="askAIAboutSelection()">
     <i class="bi bi-robot"></i> AIに説明を聞く
 </button>
+
+<!-- カスタム右クリックメニュー -->
+<div class="custom-context-menu" id="customContextMenu">
+    <div class="menu-item" onclick="askAIAboutSelection()">
+        <i class="bi bi-robot"></i> AIに説明を聞く
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -216,8 +253,29 @@ let selectedAnnotationData = null;
 
 // ===== Mermaid.js レンダリング（Shadow DOM対応） =====
 // Mermaid.jsはdocument全体を検索するため、Shadow DOM内では動作しない。
-// Shadow DOM内の.mermaid要素を取り出し、一時的にdocument.bodyに配置してレンダリングし、
-// 完了後にShadow DOM内に戻す。
+// Shadow DOM内の.mermaid要素を取り出し、mermaid.render() APIでレンダリングする。
+function sanitizeMermaidCode(code) {
+    // Mermaid.jsでパースエラーを起こす文字をエスケープする
+    // ノードラベル内の丸括弧 () をテキストノード用の引用符で囲む
+    // 例: A[圧縮 (情報の損失)] → A["圧縮 (情報の損失)"]
+    // ノード定義: ID[label], ID(label), ID{label}, ID((label)) 等
+    // ラベル内にパースエラーを起こす文字がある場合、引用符で囲む
+    var lines = code.split('\n');
+    var result = [];
+    for (var i = 0; i < lines.length; i++) {
+        var line = lines[i];
+        // ノードラベルを検出して引用符で囲む
+        // パターン: ID[...] または ID[...|...] 形式のラベル内に ( ) がある場合
+        line = line.replace(/(\w+)\[([^\]]*\([^\]]*)\]/g, function(match, id, label) {
+            // ラベルが既に引用符で囲まれている場合はスキップ
+            if (/^".*"$/.test(label.trim())) return match;
+            return id + '["' + label.replace(/"/g, '#quot;') + '"]';
+        });
+        result.push(line);
+    }
+    return result.join('\n');
+}
+
 function renderMermaidInShadow(container, answerId) {
     var mermaidEls = container.querySelectorAll('.mermaid, pre.mermaid');
     if (mermaidEls.length === 0) return;
@@ -229,6 +287,7 @@ function renderMermaidInShadow(container, answerId) {
         mermaidEls.forEach(function(el, i) {
             var code = el.textContent.trim();
             if (!code) return;
+            code = sanitizeMermaidCode(code);
             var id = 'mermaid-sr' + answerId + '-' + i;
             promises.push(
                 mermaid.render(id, code).then(function(result) {
@@ -236,6 +295,9 @@ function renderMermaidInShadow(container, answerId) {
                     el.classList.add('mermaid-rendered');
                 }).catch(function(err) {
                     console.warn('Mermaid render error:', err);
+                    // エラー時はコードブロックとして表示
+                    el.innerHTML = '<pre style="background:#f8d7da;padding:8px;border-radius:4px;font-size:0.8em;color:#721c24;">' +
+                        'Mermaid diagram render failed:\n' + err.message + '</pre>';
                 })
             );
         });
@@ -252,6 +314,37 @@ function renderMermaidInShadow(container, answerId) {
         document.head.appendChild(script);
     } else {
         doRender();
+    }
+}
+
+// ===== Chart.js レンダリング（Shadow DOM対応） =====
+// Chart.jsはcanvas要素のgetContext等を直接使うが、
+// Shadow DOM内のcanvasでも動作する（Chart.js v4+はcanvas要素直接渡しに対応）。
+// ただしChart.jsの初期化スクリプトがdocument.getElementById等を使う場合があるため、
+// Shadow Root経由のID取得に変換する。
+function renderChartJSInShadow(container, answerId) {
+    var canvases = container.querySelectorAll('canvas');
+    if (canvases.length === 0) return;
+
+    function doRender() {
+        if (typeof Chart === 'undefined') return;
+        // Chart.js inlineスクリプトは既にloadNextで処理済み
+        // ここではcanvasが見つかったが Chart が未作成の場合のフォールバック
+        canvases.forEach(function(canvas) {
+            if (canvas.dataset.chartRendered) return;
+            canvas.dataset.chartRendered = 'true';
+        });
+    }
+
+    // Chart.jsが未ロードの場合はCDNから読み込む
+    if (typeof Chart === 'undefined') {
+        var existingScript = document.querySelector('script[src*="chart.js"], script[src*="chart.umd"]');
+        if (!existingScript) {
+            var script = document.createElement('script');
+            script.src = 'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js';
+            script.onload = function() { doRender(); };
+            document.head.appendChild(script);
+        }
     }
 }
 
@@ -289,13 +382,24 @@ function initShadowDOM() {
         // ★ Shadow DOMに<script>を追加しても実行されない（ブラウザ仕様）
         //    → document.head に追加して実行する
         // ★ Mermaid.jsスクリプトは除外（Shadow DOM内で別途レンダリングする）
+        // ★ Chart.js CDNは事前ロード、インラインのnew Chart()はShadow Root経由に変換
         var scripts = Array.from(container.querySelectorAll('script'));
         var hasMermaidElements = container.querySelectorAll('.mermaid, pre.mermaid').length > 0;
+        var hasCanvasElements = container.querySelectorAll('canvas').length > 0;
+
+        // Chart.js CDNを事前にロードする必要があるためチェック
+        var chartCDNScripts = scripts.filter(function(s) {
+            return s.src && (s.src.indexOf('chart.js') !== -1 || s.src.indexOf('chart.umd') !== -1);
+        });
+
         var loadNext = function(idx) {
             if (idx >= scripts.length) {
-                // 全スクリプト読み込み完了後、Mermaidがあればレンダリング
+                // 全スクリプト読み込み完了後
                 if (hasMermaidElements) {
                     renderMermaidInShadow(container, answerId);
+                }
+                if (hasCanvasElements) {
+                    renderChartJSInShadow(container, answerId);
                 }
                 return;
             }
@@ -310,8 +414,15 @@ function initShadowDOM() {
                 return;
             }
             if (oldScript.src) {
-                // 外部スクリプト: onloadで順次読み込み
-                newScript.src = oldScript.src;
+                // 外部スクリプト: 既にロード済みなら重複読み込みしない
+                var srcUrl = oldScript.src;
+                var isChartJS = srcUrl.indexOf('chart.js') !== -1 || srcUrl.indexOf('chart.umd') !== -1;
+                if (isChartJS && typeof Chart !== 'undefined') {
+                    oldScript.remove();
+                    loadNext(idx + 1);
+                    return;
+                }
+                newScript.src = srcUrl;
                 if (oldScript.type) newScript.type = oldScript.type;
                 newScript.onload = function() { loadNext(idx + 1); };
                 newScript.onerror = function() { loadNext(idx + 1); };
@@ -351,6 +462,11 @@ function initShadowDOM() {
         // テキスト選択リスナー（Shadow DOM内）
         container.addEventListener('mouseup', function(e) {
             handleShadowSelection(e, host, shadow, answerId);
+        });
+
+        // 右クリックメニュー（Shadow DOM内）
+        container.addEventListener('contextmenu', function(e) {
+            handleContextMenu(e, shadow, answerId);
         });
 
         // KaTeX数式クリックリスナー（Shadow DOM内）
@@ -406,6 +522,114 @@ function handleShadowSelection(e, host, shadow, answerId) {
     };
 }
 
+// ===== 右クリックコンテキストメニュー =====
+function handleContextMenu(e, shadow, answerId) {
+    var contextMenu = document.getElementById('customContextMenu');
+    // 選択テキストを取得
+    var sel, text = '';
+    if (shadow && shadow.getSelection) {
+        sel = shadow.getSelection();
+        text = sel ? sel.toString().trim() : '';
+    }
+    if (!text && window.getSelection) {
+        sel = window.getSelection();
+        text = sel ? sel.toString().trim() : '';
+    }
+
+    if (!text || text.length < 2 || text.length > 500) {
+        // テキスト選択がない場合はブラウザデフォルトメニューを表示
+        contextMenu.style.display = 'none';
+        return;
+    }
+
+    // ブラウザのデフォルトメニューを抑止
+    e.preventDefault();
+    e.stopPropagation();
+
+    // selectedAnnotationData を設定
+    var contentEl = shadow ? shadow.querySelector('.shadow-content') : null;
+    if (!contentEl) {
+        var anchorNode = sel.anchorNode;
+        if (anchorNode) {
+            var answerBody = anchorNode.nodeType === 3
+                ? anchorNode.parentElement && anchorNode.parentElement.closest('.answer-body')
+                : anchorNode.closest && anchorNode.closest('.answer-body');
+            contentEl = answerBody;
+        }
+    }
+    selectedAnnotationData = {
+        answerId: answerId || (contentEl && contentEl.dataset ? contentEl.dataset.answerId : ''),
+        selectedText: text,
+        contextBefore: contentEl ? contentEl.innerText || '' : '',
+        contextAfter: '',
+    };
+
+    // メニュー位置
+    contextMenu.style.left = e.clientX + 'px';
+    contextMenu.style.top = e.clientY + 'px';
+    contextMenu.style.display = 'block';
+
+    // 画面外にはみ出す場合の調整
+    var menuRect = contextMenu.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth) {
+        contextMenu.style.left = (window.innerWidth - menuRect.width - 8) + 'px';
+    }
+    if (menuRect.bottom > window.innerHeight) {
+        contextMenu.style.top = (window.innerHeight - menuRect.height - 8) + 'px';
+    }
+}
+
+// ドキュメントレベルの右クリック（ユーザ回答エリア）
+document.addEventListener('contextmenu', function(e) {
+    var contextMenu = document.getElementById('customContextMenu');
+    // 回答エリア内かどうかチェック
+    var answerBody = e.target.closest ? e.target.closest('.answer-body') : null;
+    if (!answerBody) {
+        contextMenu.style.display = 'none';
+        return;  // ブラウザデフォルトを許可
+    }
+    // Shadow DOMホストの場合はShadow DOM側のハンドラで処理
+    if (answerBody.classList.contains('ai-shadow-host')) {
+        return;
+    }
+
+    var sel = window.getSelection();
+    var text = sel ? sel.toString().trim() : '';
+    if (!text || text.length < 2 || text.length > 500) {
+        contextMenu.style.display = 'none';
+        return;  // ブラウザデフォルトを許可
+    }
+
+    e.preventDefault();
+    var answerId = answerBody.dataset.answerId || '';
+    selectedAnnotationData = {
+        answerId: answerId,
+        selectedText: text,
+        contextBefore: answerBody.innerText || '',
+        contextAfter: '',
+    };
+
+    contextMenu.style.left = e.clientX + 'px';
+    contextMenu.style.top = e.clientY + 'px';
+    contextMenu.style.display = 'block';
+
+    var menuRect = contextMenu.getBoundingClientRect();
+    if (menuRect.right > window.innerWidth) {
+        contextMenu.style.left = (window.innerWidth - menuRect.width - 8) + 'px';
+    }
+    if (menuRect.bottom > window.innerHeight) {
+        contextMenu.style.top = (window.innerHeight - menuRect.height - 8) + 'px';
+    }
+});
+
+// メニュー外クリックでメニューを閉じる
+document.addEventListener('click', function(e) {
+    var contextMenu = document.getElementById('customContextMenu');
+    if (contextMenu && !contextMenu.contains(e.target)) {
+        contextMenu.style.display = 'none';
+    }
+});
+
 // ===== 通常のテキスト選択（ユーザ回答用） =====
 document.addEventListener('mouseup', function(e) {
     const aiBtn = document.getElementById('aiAskBtn');
@@ -453,8 +677,12 @@ document.addEventListener('mouseup', function(e) {
 document.addEventListener('mousedown', function(e) {
     const aiBtn = document.getElementById('aiAskBtn');
     const popup = document.getElementById('annotationPopup');
+    const contextMenu = document.getElementById('customContextMenu');
     if (!aiBtn.contains(e.target)) {
         aiBtn.style.display = 'none';
+    }
+    if (contextMenu && !contextMenu.contains(e.target)) {
+        contextMenu.style.display = 'none';
     }
     if (!popup.contains(e.target)) {
         _popupOnTrigger = false;
@@ -467,9 +695,11 @@ document.addEventListener('mousedown', function(e) {
 function askAIAboutSelection() {
     if (!selectedAnnotationData) return;
     const aiBtn = document.getElementById('aiAskBtn');
-    const btnLeft = aiBtn.style.left;
-    const btnTop = aiBtn.style.top;
+    const contextMenu = document.getElementById('customContextMenu');
+    const btnLeft = contextMenu.style.display === 'block' ? contextMenu.style.left : aiBtn.style.left;
+    const btnTop = contextMenu.style.display === 'block' ? contextMenu.style.top : aiBtn.style.top;
     aiBtn.style.display = 'none';
+    if (contextMenu) contextMenu.style.display = 'none';
 
     showAnnotationPopup(
         '<div class="text-center"><div class="spinner-border spinner-border-sm text-primary"></div> AIが解説を生成中...</div>',
@@ -495,6 +725,8 @@ function askAIAboutSelection() {
         hideAnnotationPopup();
         if (data.explanation) {
             highlightSelection(selectedAnnotationData, data.explanation, data.annotation_id);
+            // ハイライトが0件でもポップアップ表示（SVG内テキスト等）
+            showAnnotationPopup(data.explanation, btnLeft, btnTop);
         } else if (data.error) {
             showAnnotationPopup('<div class="text-danger">' + data.error + '</div>', btnLeft, btnTop);
         }
@@ -520,6 +752,8 @@ function highlightSelection(annotationData, explanation, annotationId) {
     const walker = document.createTreeWalker(searchRoot, NodeFilter.SHOW_TEXT, null, false);
     let node;
     while (node = walker.nextNode()) {
+        // SVG内のテキストノードはスキップ（<span>を挿入できない）
+        if (node.parentElement && node.parentElement.closest('svg')) continue;
         let startIdx = 0;
         let idx;
         while ((idx = node.textContent.indexOf(annotationData.selectedText, startIdx)) >= 0) {

@@ -12,7 +12,9 @@ logger = logging.getLogger('gemini')
 # Vertex AI設定
 VERTEX_PROJECT = 'sirisa'
 VERTEX_LOCATION = 'us-central1'
-VERTEX_MODEL = 'gemini-2.0-flash'
+# Pro: 初回回答（高品質）、Flash: 返信・注釈・補完（高速）
+VERTEX_MODEL_PRO = 'gemini-2.5-pro'
+VERTEX_MODEL_FLASH = 'gemini-2.5-flash'
 
 # bleachで許可するHTMLタグと属性
 ALLOWED_TAGS = [
@@ -157,7 +159,7 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
 
     try:
         model = GenerativeModel(
-            model_name=VERTEX_MODEL,
+            model_name=VERTEX_MODEL_PRO,
             system_instruction=system_prompt,
         )
 
@@ -165,7 +167,7 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
             content_parts,
             generation_config=GenerationConfig(
                 temperature=0.7,
-                max_output_tokens=8192,
+                max_output_tokens=65536,
             ),
         )
 
@@ -187,11 +189,16 @@ def generate_answer(question_title, question_body, subject_name, body_format='te
         raise
 
 
-def _get_gemini_model():
-    """Geminiモデルのインスタンスを取得する（Vertex AI）"""
+def _get_gemini_model(mode='flash'):
+    """Geminiモデルのインスタンスを取得する（Vertex AI）
+    
+    Args:
+        mode: 'pro' (高品質・初回回答) or 'flash' (高速・返信/注釈)
+    """
     from vertexai.generative_models import GenerativeModel
     _init_vertex()
-    return GenerativeModel(model_name=VERTEX_MODEL)
+    model_name = VERTEX_MODEL_PRO if mode == 'pro' else VERTEX_MODEL_FLASH
+    return GenerativeModel(model_name=model_name)
 
 
 def generate_reply_text(question_title, question_body, answer_body,

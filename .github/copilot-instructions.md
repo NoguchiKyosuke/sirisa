@@ -8,7 +8,7 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - **Backend**: Python 3.12, Django 4.2 LTS
 - **Database**: PostgreSQL 16
 - **Task Queue**: Celery 5.6 + Redis
-- **AI**: Google Gemini 2.0 Flash (Vertex AI / google-cloud-aiplatform SDK)
+- **AI**: Gemini 2.5 Pro (初回回答) + Gemini 2.5 Flash (返信・注釈) / Vertex AI SDK
 - **AI制限**: 1アカウント1日100回（`AIUsageLog` モデル）
 - **Frontend**: Django Templates + htmx 2.0 + Bootstrap 5.3 + KaTeX
 - **Server**: Nginx + Gunicorn (systemd)
@@ -60,10 +60,14 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
 - 図表はSVG、Chart.js、Mermaid.js、CSSのみの4方式を教科に応じて使い分け
 - AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）
-- 単語ホバー注釈は文章中の全出現箇所をハイライト（最初の1箇所だけでなく）
-- 注釈ポップアップはトリガー要素またはポップアップ上にカーソルがある間は表示維持、他の場所に触れると消える
+- エクスポート: PDF（WeasyPrint + Noto Sans CJK JP）、Markdown（HTMLテキスト抽出）、CSV/XLSX/TXT
+- Mermaid.jsのラベルは引用符で囲む（パース対策）。<script>タグ不要（システム自動レンダリング）
+- Chart.jsはShadow DOM内で動作。CDNの重複読み込みを防止
+- カスタム右クリックメニュー: 回答エリアでテキスト選択→右クリックで「AIに説明を聞く」（ブラウザデフォルトメニュー非表示）
+- SVG内テキストへの注釈: ハイライトはスキップ、ポップアップは表示
+- 単語ホバー注釈は文章中の全出現箇所をハイライト（最初の1箇所だけでなく。SVG内テキストは除外）
 - 数式クリックポップアップも同じホバー維持挙動（ポップアップ外クリックで消える）
-- `max_output_tokens=16384`でリッチHTML生成に十分な余地を確保
+- `max_output_tokens=65536`（Pro）でリッチHTML生成に十分な余地を確保
 - ユーザ回答のHTMLは `bleach` でサニタイズ
 - ファイルアップロードは100MB制限
 - 本番環境は IP 制限あり（Nginx）

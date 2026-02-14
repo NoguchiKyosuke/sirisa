@@ -115,7 +115,8 @@
                 <form method="post" action="{% url 'questions:reply_create' answer.pk %}" class="ms-3 mt-2">
                     {% csrf_token %}
                     <div class="input-group input-group-sm">
-                        <textarea name="body" class="form-control" rows="1" placeholder="返信を入力... @ai でAIに質問できます" required></textarea>
+                        <textarea name="body" class="form-control reply-textarea" rows="1" placeholder="返信を入力... @ai でAIに質問できます" required
+                                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('form').submit();}"></textarea>
                         <button type="submit" class="btn btn-sirisa btn-sm"><i class="bi bi-send"></i></button>
                     </div>
                 </form>

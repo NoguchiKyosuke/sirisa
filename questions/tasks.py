@@ -79,7 +79,7 @@ def generate_ai_answer(self, question_id, user_id=None):
             defaults={
                 'body': 'AI回答を生成中です...',
                 'body_format': 'html',
-                'ai_model': 'gemini-2.0-flash',
+                'ai_model': 'gemini-2.5-pro',
                 'ai_generation_status': 'pending',
             }
         )
@@ -186,7 +186,7 @@ def generate_ai_reply(self, reply_id, user_id=None):
         user=gemini_user,
         body='AI返信を生成中です...',
         is_ai_generated=True,
-        ai_model='gemini-2.0-flash',
+        ai_model='gemini-2.5-flash',
         ai_generation_status='pending',
     )
 

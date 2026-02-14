@@ -4,11 +4,60 @@ SIRISA エクスポート機能
 """
 import csv
 import io
+import re
+from html.parser import HTMLParser
 from django.http import HttpResponse
 from openpyxl import Workbook
 from weasyprint import HTML as WeasyHTML
 
 from .utils import render_body
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """HTMLからテキストを抽出するパーサ"""
+    def __init__(self):
+        super().__init__()
+        self.result = []
+        self._skip = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self._skip = True
+        elif tag == 'br':
+            self.result.append('\n')
+        elif tag in ('p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'li', 'tr'):
+            self.result.append('\n')
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style'):
+            self._skip = False
+        elif tag in ('p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+            self.result.append('\n')
+
+    def handle_data(self, data):
+        if not self._skip:
+            self.result.append(data)
+
+    def get_text(self):
+        text = ''.join(self.result)
+        # 連続する空行を1つに
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+
+
+def html_to_text(html_str):
+    """HTMLからテキストを抽出する"""
+    if not html_str:
+        return ''
+    # display:noneのスライドも含めるため、style属性のdisplay:noneを除去
+    html_str = re.sub(r'display\s*:\s*none\s*;?', '', html_str, flags=re.IGNORECASE)
+    parser = _HTMLTextExtractor()
+    try:
+        parser.feed(html_str)
+        return parser.get_text()
+    except Exception:
+        # パース失敗時はタグを単純除去
+        return re.sub(r'<[^>]+>', '', html_str)
 
 
 def export_csv(question, answers):
@@ -78,7 +127,7 @@ def export_pdf(question, answers):
     <html lang="ja">
     <head><meta charset="utf-8"><title>{question.title}</title>
     <style>
-        body {{ font-family: sans-serif; margin: 40px; font-size: 14px; }}
+        body {{ font-family: 'Noto Sans CJK JP', 'Noto Sans JP', sans-serif; margin: 40px; font-size: 14px; }}
         h1 {{ color: #2c3e50; font-size: 20px; border-bottom: 2px solid #3498db; padding-bottom: 8px; }}
         h2 {{ color: #34495e; font-size: 16px; margin-top: 24px; }}
         .meta {{ color: #7f8c8d; font-size: 12px; margin-bottom: 16px; }}
@@ -99,10 +148,15 @@ def export_pdf(question, answers):
     for answer in answers:
         ai_class = ' ai-answer' if answer.is_ai_generated else ''
         ai_badge = ' <span class="badge">AI回答</span>' if answer.is_ai_generated else ''
+        # AI回答の場合: display:noneのスライドもすべて表示し、scriptタグを除去
+        answer_html = render_body(answer.body, answer.body_format)
+        if answer.is_ai_generated:
+            answer_html = re.sub(r'display\s*:\s*none\s*;?', '', answer_html, flags=re.IGNORECASE)
+            answer_html = re.sub(r'<script[^>]*>.*?</script>', '', answer_html, flags=re.DOTALL | re.IGNORECASE)
         html_content += f"""
         <div class="answer{ai_class}">
             <div class="meta">{answer.user.username}{ai_badge} | {answer.created_at.strftime('%Y-%m-%d %H:%M:%S')}</div>
-            <div>{render_body(answer.body, answer.body_format)}</div>
+            <div>{answer_html}</div>
         </div>
         """
 
@@ -136,12 +190,14 @@ def export_markdown(question, answers):
 """
     for i, answer in enumerate(answers, 1):
         ai_mark = ' [AI回答]' if answer.is_ai_generated else ''
+        # AI回答はHTMLなのでテキスト抽出（スライドの全ページ含む）
+        body_text = html_to_text(answer.body) if answer.is_ai_generated else answer.body
         content += f"""### 回答 {i}{ai_mark}
 
 **回答者**: {answer.user.username}
 **日時**: {answer.created_at.strftime('%Y-%m-%d %H:%M:%S')}
 
-{answer.body}
+{body_text}
 
 ---
 

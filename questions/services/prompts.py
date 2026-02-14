@@ -57,16 +57,19 @@ new Chart(document.getElementById('myChart'), {
 </script>
 
 3. Mermaid.js でフローチャート・シーケンス図・状態遷移図:
+★★★ Mermaid.js重要ルール ★★★
+- ノードラベルに丸括弧 ( ) を含む場合は、必ず引用符で囲んでください: A[\"テキスト (説明)\"]
+- ラベルにセミコロン ; を含めないでください
+- 日本語テキストのラベルは引用符で囲むのが安全です: A[\"日本語ラベル\"]
+- Mermaid.jsの<script>タグやmermaid.initialize()は不要です。<pre class="mermaid">のみ記述してください。システムが自動でレンダリングします。
 <pre class="mermaid">
 graph TD
-    A[開始] --> B{条件}
-    B -->|Yes| C[処理1]
-    B -->|No| D[処理2]
-    C --> E[終了]
+    A[\"開始\"] --> B{\"条件分岐\"}
+    B -->|Yes| C[\"処理1\"]
+    B -->|No| D[\"処理2\"]
+    C --> E[\"終了\"]
     D --> E
 </pre>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({startOnLoad:true, theme:'default'});</script>
 
 4. CSSのみで簡単な図（比較表、タイムライン、関係図）:
 <div style="display:flex;gap:8px;align-items:end;margin:16px 0;">
@@ -339,6 +342,9 @@ SLIDE_PROMPT = """あなたは高校生の学習を支援する優秀な教師AI
 - 重要ポイントは色付きボックスやアイコンで強調してください。
 - 数式はKaTeX記法（$...$ や $$...$$）で記述してください。
 - SVG図形やグラフ、Chart.js、Mermaid.jsを積極的に使い、最低1枚のスライドに図やグラフを含めてください。
+- Mermaid.jsのノードラベルに丸括弧やセミコロンを含む場合は引用符で囲んでください: A[\"テキスト (説明)\"]
+- Mermaid.jsの<script>タグやmermaid.initialize()は不要です。<pre class="mermaid">のみ記述してください。
+- Chart.jsの<script src="...chart.js...">は記述してOKです。
 - フェードイン・スライドインなどのアニメーションを各スライドに付けてください。
 - 外部ライブラリは https://cdn.jsdelivr.net または https://cdnjs.cloudflare.com から読み込み可能です。
 

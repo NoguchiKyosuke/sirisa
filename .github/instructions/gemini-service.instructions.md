@@ -6,10 +6,13 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 
 ## SDK
 - `google-cloud-aiplatform` (Vertex AI SDK) を使用
-- モデル: `gemini-2.0-flash`
 - プロジェクト: `sirisa`, ロケーション: `us-central1`
 - 認証: Application Default Credentials（サービスアカウント or `gcloud auth application-default login`）
 - APIキー不要（Vertex AIはIAM認証）
+
+## モデル構成
+- **Pro** (`gemini-2.5-pro`): 初回回答生成（通常+スライド）。高品質。max_output_tokens=65536
+- **Flash** (`gemini-2.5-flash`): 返信、注釈、補完。高速。max_output_tokens=1024〜2048
 
 ## プロンプト設計
 - `prompts.py` に `BASE_PROMPT` と `SUBJECT_PROMPTS` を定義
@@ -19,7 +22,7 @@ applyTo: "**/services/gemini_service.py,**/services/prompts.py"
 - **図・グラフ必須**: SVG、Chart.js、Mermaid.js等を使い最低1つの図・グラフ・ダイアグラムを含める
 - プロンプトに具体的なアニメーション・図表コード例を記載し、Geminiが必ず実装するよう強制
 - 使い分け: 数学グラフ→SVG, 統計データ→Chart.js, フロー→Mermaid.js, タイムライン→CSS+SVG
-- `max_output_tokens=16384`（リッチHTML生成のため十分なトークン量を確保）
+- `max_output_tokens=65536`（Pro、リッチHTML生成のため十分なトークン量を確保）
 - 質問ごとに2種類のAI回答を生成: `normal`（通常）+ `slide`（スライドプレゼン形式）
 - `SLIDE_PROMPT` でスライド形式の出力を定義（ナビゲーション付きプレゼンHTML）
 - `generate_answer()` に `style` 引数: 'normal' or 'slide' でプロンプト切替
