@@ -67,7 +67,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script>
 (function() {
-    // Firebase 初期化
+    // Firebase 初期化（authDomain は自ドメイン — nginx が /__/ を Firebase にプロキシ）
     const firebaseConfig = {
         apiKey: "{{ firebase_api_key }}",
         authDomain: "{{ firebase_auth_domain }}",
@@ -87,23 +87,30 @@
     function showLoading() {
         document.getElementById('auth-loading').classList.remove('d-none');
         document.getElementById('btn-google').disabled = true;
-        document.getElementById('btn-email').disabled = true;
+        var btnEmail = document.getElementById('btn-email');
+        if (btnEmail) btnEmail.disabled = true;
     }
     function hideLoading() {
         document.getElementById('auth-loading').classList.add('d-none');
         document.getElementById('btn-google').disabled = false;
-        document.getElementById('btn-email').disabled = false;
+        var btnEmail = document.getElementById('btn-email');
+        if (btnEmail) btnEmail.disabled = false;
     }
 
     // Firebase ID トークンをサーバに送信
     async function sendTokenToServer(user) {
+        console.log('[SIRISA] sendTokenToServer: getting ID token...');
         const idToken = await user.getIdToken();
+        console.log('[SIRISA] sendTokenToServer: posting to callback...');
         const resp = await fetch('{% url "accounts:firebase_callback" %}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ idToken: idToken }),
+            credentials: 'same-origin',
         });
+        console.log('[SIRISA] sendTokenToServer: response status =', resp.status);
         const data = await resp.json();
+        console.log('[SIRISA] sendTokenToServer: response data =', data);
         if (data.status === 'ok') {
             window.location.href = data.redirect;
         } else {
@@ -112,21 +119,32 @@
         }
     }
 
-    // Google サインイン
-    window.signInWithGoogle = async function() {
+    // Google サインイン（リダイレクト方式 — same-origin authDomain で動作）
+    window.signInWithGoogle = function() {
         hideError();
         showLoading();
-        try {
-            const provider = new firebase.auth.GoogleAuthProvider();
-            const result = await auth.signInWithPopup(provider);
-            await sendTokenToServer(result.user);
-        } catch (err) {
-            hideLoading();
-            if (err.code === 'auth/popup-closed-by-user') return;
-            console.error('Google sign-in error:', err);
-            showError('Googleサインインに失敗しました: ' + err.message);
-        }
+        console.log('[SIRISA] Starting Google sign-in with redirect...');
+        var provider = new firebase.auth.GoogleAuthProvider();
+        auth.signInWithRedirect(provider);
     };
+
+    // リダイレクト後の結果を処理（ページ読み込み時に自動実行）
+    auth.getRedirectResult().then(function(result) {
+        if (result && result.user) {
+            console.log('[SIRISA] getRedirectResult: user =', result.user.email);
+            showLoading();
+            sendTokenToServer(result.user).catch(function(err) {
+                hideLoading();
+                console.error('[SIRISA] sendTokenToServer error:', err);
+                showError('サーバ認証に失敗しました: ' + err.message);
+            });
+        }
+    }).catch(function(err) {
+        console.error('[SIRISA] getRedirectResult error:', err);
+        if (err.code) {
+            showError('Google認証エラー [' + err.code + ']: ' + err.message);
+        }
+    });
 
     // メールリンク送信
     window.sendEmailLink = async function() {
@@ -151,12 +169,8 @@
             document.getElementById('sent-to-email').textContent = email;
         } catch (err) {
             hideLoading();
-            console.error('Email link error:', err);
-            if (err.code === 'auth/invalid-email') {
-                showError('無効なメールアドレスです。');
-            } else {
-                showError('メール送信に失敗しました: ' + err.message);
-            }
+            console.error('[SIRISA] Email link error:', err);
+            showError('メール送信エラー [' + (err.code || '') + ']: ' + err.message);
         }
     };
 

@@ -59,6 +59,7 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - `sanitize_ai_html()` で前処理: DOCTYPE/html/head/body外殻除去 + KaTeX CDN除去 + integrity属性除去 + 未閉じタグ自動閉じ（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
 - AI回答の `<script>` 内の `document.getElementById` 等はShadow Root経由に自動変換
 - Shadow DOM内の `onclick` 属性は `convertOnclickHandlers()` で `addEventListener` に変換。`new Function('event', 'with(window){' + code + '}')` を使用し、(a) `event` パラメータで `currentTarget` アクセス可能、(b) `with(window)` でグローバル関数（`nextSlide_xxx` 等）にアクセス可能。変換は `loadNext` 完了後（=スクリプト読み込み後）に実行。
+- Shadow DOM用インラインスクリプト処理で、IIFE内の`function`宣言を自動的に`window`にエクスポート（`window["funcName"]=funcName;` をIIFE末尾に挿入）。これにより`onclick`属性から参照される関数がグローバルスコープで利用可能になる。
 - AI返信テキストは `strip_html_document_wrapper()` で `<!DOCTYPE>/<html>/<head>/<body>` 外殻を除去
 - 返信エリアの文章選択でも「AIに説明を聞く」ポップアップが使用可能（`reply-body-area` クラス + `data-answer-id`）
 - 返信エリア内の数式クリックでも導出過程のAI説明ポップアップが表示される
@@ -69,9 +70,10 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
 - 図表はSVG、Chart.js、Mermaid.js、CSSのみの4方式を教科に応じて使い分け
 - AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）。`generate_ai_answer` タスクは両方の pending レコードを先に作成してから生成を開始（ローディングカードが即座に表示されるように）
-- **Firebase 認証フロー**: ログインページで Firebase Web SDK（v10 compat）を使い、Google サインイン or メールリンク認証 → Firebase ID トークンを `FirebaseCallbackView` に POST → `FirebaseAuthBackend` で Django セッション作成。新規ユーザは `RegisterView` でユーザ名のみ入力。
-- **Firebase 設定**: `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN` を `.env` で管理。サーバ側は GCE デフォルト認証情報 + Firebase Admin SDK。
-- `User` モデルに `firebase_uid` フィールド（Firebase UID と紐付け）
+- **Firebase 認証フロー**: ログインページで Firebase Web SDK（v10 compat）を使い、`signInWithRedirect`（Google）or メールリンク認証 → Firebase ID トークンを `FirebaseCallbackView` に POST → Django セッション作成。新規ユーザは `RegisterView` でユーザ名のみ入力。リダイレクト後は `getRedirectResult()` で結果を処理。
+- **Firebase 設定**: `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN` を `.env` で管理。`FIREBASE_AUTH_DOMAIN` は自ドメイン（`sirisa.net`）に設定し、Tracking Prevention によるサードパーティストレージブロックを回避。サーバ側は GCE デフォルト認証情報 + Firebase Admin SDK。
+- **Firebase nginx プロキシ**: `/__/auth/` と `/__/firebase/` を `sirisa-f5a1f.firebaseapp.com` にリバースプロキシ。`authDomain` を自ドメインにする際に必要（`signInWithRedirect` が `/__/auth/handler` と `/__/firebase/init.json` を参照するため）。
+- `User` モデルに `firebase_uid` フィールド（Firebase UID と紐付け）。`FirebaseCallbackView` と `RegisterView` で論理削除済みユーザの `firebase_uid` を自動クリア（IntegrityError 防止）。
 - リアクションは👍（いいね）/👎（よくない）の2種類のみ
 - 返信はAJAX送信（ページリロードなし）、メディア添付対応（`ReplyMedia`モデル）
 - AI返信はポーリングで完了検出（`ReplyStatusAPIView`、4秒間隔）

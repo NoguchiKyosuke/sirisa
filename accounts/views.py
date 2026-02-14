@@ -6,7 +6,7 @@ Firebase 認証（メールリンク + Google サインイン）
 import json
 import logging
 from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout, get_user_model
+from django.contrib.auth import login, logout, get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
 from django.http import JsonResponse
@@ -75,6 +75,8 @@ class RegisterView(View):
         form.data['email'] = firebase_email
 
         if form.is_valid():
+            # 削除済みユーザの firebase_uid をクリア（unique 制約対策）
+            User.objects.filter(firebase_uid=firebase_uid, is_deleted=True).update(firebase_uid=None)
             user = form.save(commit=False)
             user.firebase_uid = firebase_uid
             user.is_verified = True
@@ -113,32 +115,59 @@ class FirebaseCallbackView(View):
         try:
             body = json.loads(request.body)
         except (json.JSONDecodeError, ValueError):
+            logger.warning('FirebaseCallback: invalid JSON body')
             return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
 
         id_token = body.get('idToken')
         if not id_token:
+            logger.warning('FirebaseCallback: missing idToken')
             return JsonResponse({'status': 'error', 'message': 'idToken is required'}, status=400)
 
         # Firebase ID トークン検証
         decoded = verify_id_token(id_token)
         if decoded is None:
+            logger.warning('FirebaseCallback: token verification failed')
             return JsonResponse({'status': 'error', 'message': '認証に失敗しました。'}, status=401)
 
         uid = decoded.get('uid')
         email = decoded.get('email')
         name = decoded.get('name', '')
+        logger.info('FirebaseCallback: token verified uid=%s email=%s', uid, email)
 
         if not email:
             return JsonResponse({'status': 'error', 'message': 'メールアドレスが取得できませんでした。'}, status=400)
 
-        # Django 認証バックエンドで認証
-        user = authenticate(request, firebase_id_token=id_token)
+        # 削除済みユーザの firebase_uid をクリア（再登録を許可）
+        User.objects.filter(firebase_uid=uid, is_deleted=True).update(firebase_uid=None)
+
+        # Firebase UID で既存ユーザを検索
+        user = None
+        try:
+            user = User.objects.get(firebase_uid=uid, is_deleted=False)
+            # メールが変わっていたら同期
+            if user.email != email:
+                user.email = email
+                user.save(update_fields=['email'])
+            logger.info('FirebaseCallback: found user by firebase_uid=%s', uid)
+        except User.DoesNotExist:
+            pass
+
+        # email で既存ユーザを検索（Firebase 移行中の既存アカウント）
+        if user is None:
+            try:
+                user = User.objects.get(email=email, is_deleted=False)
+                user.firebase_uid = uid
+                user.is_verified = True
+                user.save(update_fields=['firebase_uid', 'is_verified'])
+                logger.info('FirebaseCallback: linked existing user %s to firebase_uid=%s', email, uid)
+            except User.DoesNotExist:
+                pass
 
         if user is not None:
             # 既存ユーザ → ログイン
             login(request, user, backend='accounts.backends.FirebaseAuthBackend')
             request.session.set_expiry(2592000)  # 30日間
-            logger.info('Firebase login: %s (uid=%s)', email, uid)
+            logger.info('FirebaseCallback: login success for %s', email)
             return JsonResponse({
                 'status': 'ok',
                 'redirect': '/',
@@ -149,7 +178,7 @@ class FirebaseCallbackView(View):
             request.session['firebase_uid'] = uid
             request.session['firebase_email'] = email
             request.session['firebase_name'] = name
-            logger.info('Firebase new user: %s (uid=%s) → register', email, uid)
+            logger.info('FirebaseCallback: new user %s → register', email)
             return JsonResponse({
                 'status': 'ok',
                 'redirect': '/accounts/register/',

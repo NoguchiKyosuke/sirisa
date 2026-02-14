@@ -464,6 +464,26 @@ function initShadowDOM() {
                     'window.__sr' + answerId + '.querySelector(');
                 code = code.replace(/document\.querySelectorAll\s*\(/g,
                     'window.__sr' + answerId + '.querySelectorAll(');
+
+                // IIFE内のfunction宣言をwindowにエクスポート
+                // (onclick属性からの呼び出しに必要 — Shadow DOM内ではグローバル関数参照不可のため)
+                var funcDeclRegex = /\bfunction\s+([a-zA-Z_$][\w$]*)\s*\(/g;
+                var funcExports = [];
+                var fm;
+                while ((fm = funcDeclRegex.exec(code)) !== null) {
+                    funcExports.push('window["' + fm[1] + '"]=' + fm[1] + ';');
+                }
+                if (funcExports.length > 0) {
+                    var exportBlock = '\n' + funcExports.join('\n') + '\n';
+                    // IIFE末尾 })(); の直前に挿入（IIFE内スコープで関数が参照可能）
+                    var iifeEndPattern = /(\}\s*\)\s*\(\s*\)\s*;?\s*)$/;
+                    if (iifeEndPattern.test(code)) {
+                        code = code.replace(iifeEndPattern, exportBlock + '$1');
+                    } else {
+                        code += exportBlock;
+                    }
+                }
+
                 newScript.textContent = code;
             }
             oldScript.remove();
