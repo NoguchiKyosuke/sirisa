@@ -20,6 +20,8 @@ urlpatterns = [
     # 返信
     path('answer/<int:pk>/reply/', views.ReplyCreateView.as_view(), name='reply_create'),
     path('reply/<int:pk>/delete/', views.ReplyDeleteView.as_view(), name='reply_delete'),
+    path('api/replies/<int:pk>/status/', views.ReplyStatusAPIView.as_view(), name='reply_status'),
+    path('api/answers/<int:pk>/replies/', views.AnswerRepliesAPIView.as_view(), name='answer_replies'),
     # API
     path('api/drafts/question/', views.QuestionDraftAPIView.as_view(), name='draft_question'),
     path('api/drafts/answer/', views.AnswerDraftAPIView.as_view(), name='draft_answer'),

@@ -25,7 +25,7 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 │   │   ├── celery.py       # Celeryアプリ設定
 │   │   └── urls.py
 │   ├── core/               # 共通モデル（SoftDelete, TimeStamp, DeletionLog）
-│   ├── accounts/           # 認証（カスタムUser, パスワードレス認証）
+│   ├── accounts/           # 認証（カスタムUser, パスワードレス認証, プロフィール, ユーザ通報）
 │   ├── questions/          # 質問・回答・リアクション・返信・AI注釈・エクスポート
 │   │   ├── services/       # Gemini AI, プロンプト
 │   │   ├── fixtures/       # subjects.json (教科マスタ)
@@ -54,15 +54,21 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 ## セキュリティ
 - IP制限によりアクセス可能なユーザが限定されているため、HTML出力に制限なし
 - AI回答はShadow DOM内に表示（CSS/JSがページ全体に影響しない）
+- Shadow DOM内にダークモード対応CSSを注入（`:host-context([data-bs-theme="dark"])`）
 - `sanitize_ai_html()` で前処理: DOCTYPE/html/head/body外殻除去 + KaTeX CDN除去 + integrity属性除去 + 未閉じタグ自動閉じ（`<style>`, `<script>` はそのまま維持 — Shadow DOMがCSSを隔離）
 - AI回答の `<script>` 内の `document.getElementById` 等はShadow Root経由に自動変換
+- Shadow DOM内の `onclick` 属性は `addEventListener` に変換（グローバルスコープ問題回避）
 - Mermaid.jsはShadow DOM内で`mermaid.render()` APIを使って個別レンダリング（startOnLoad不可）
+- Mermaid.jsラベル内の丸括弧 `()` と中括弧 `{}` は `sanitizeMermaidCode()` で引用符エスケープ
 - AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
 - 図表はSVG、Chart.js、Mermaid.js、CSSのみの4方式を教科に応じて使い分け
 - AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）
+- リアクションは👍（いいね）/👎（よくない）の2種類のみ
+- 返信はAJAX送信（ページリロードなし）、メディア添付対応（`ReplyMedia`モデル）
+- AI返信はポーリングで完了検出（`ReplyStatusAPIView`、4秒間隔）
+- ユーザプロフィール: 職業・所属・学年・年齢・自己紹介（`User`モデルに追加フィールド）
+- ユーザ通報機能: `UserReport` モデル（24時間に1回制限）
 - エクスポート: PDF（WeasyPrint + Noto Sans CJK JP）、Markdown（HTMLテキスト抽出）、CSV/XLSX/TXT
-- Mermaid.jsのラベルは引用符で囲む（パース対策）。<script>タグ不要（システム自動レンダリング）
-- Chart.jsはShadow DOM内で動作。CDNの重複読み込みを防止
 - カスタム右クリックメニュー: 回答エリアでテキスト選択→右クリックで「AIに説明を聞く」（ブラウザデフォルトメニュー非表示）
 - SVG内テキストへの注釈: ハイライトはスキップ、ポップアップは表示
 - 単語ホバー注釈は文章中の全出現箇所をハイライト（最初の1箇所だけでなく。SVG内テキストは除外）

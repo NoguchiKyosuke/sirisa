@@ -37,6 +37,11 @@
                     {% if form.body.errors %}
                     <div class="invalid-feedback d-block">{{ form.body.errors.0 }}</div>
                     {% endif %}
+                    <div class="form-text">
+                        <i class="bi bi-info-circle"></i>
+                        HTMLで入力する場合は <code>&lt;body&gt;</code> の中身のみを記述してください。
+                        <code>&lt;html&gt;</code> や <code>&lt;head&gt;</code> タグは不要です。
+                    </div>
                 </div>
 
                 <!-- メディアアップロード -->

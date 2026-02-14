@@ -216,7 +216,7 @@ class Answer(TimeStampMixin, SoftDeleteMixin):
     def reaction_score(self):
         """リアクションスコア（ソート用）"""
         positive = self.reactions.filter(
-            emoji_type__in=['thumbs_up', 'heart', 'celebration', 'idea']
+            emoji_type='thumbs_up'
         ).count()
         negative = self.reactions.filter(emoji_type='thumbs_down').count()
         return positive - negative
@@ -268,14 +268,11 @@ class AnswerMedia(TimeStampMixin, SoftDeleteMixin):
 
 
 class Reaction(models.Model):
-    """リアクションモデル（5種類の絵文字）"""
+    """リアクションモデル（いいね / よくない）"""
 
     class EmojiType(models.TextChoices):
         THUMBS_UP = 'thumbs_up', '👍'
         THUMBS_DOWN = 'thumbs_down', '👎'
-        HEART = 'heart', '❤️'
-        CELEBRATION = 'celebration', '🎉'
-        IDEA = 'idea', '💡'
 
     answer = models.ForeignKey(
         Answer, on_delete=models.CASCADE,
@@ -392,6 +389,73 @@ class Reply(TimeStampMixin, SoftDeleteMixin):
 
     def __str__(self):
         return f'{self.answer} への返信 by {self.user.username}'
+
+
+def reply_media_path(instance, filename):
+    """返信メディアファイルのアップロードパス"""
+    return f'replies/{instance.reply.pk}/{filename}'
+
+
+class ReplyMedia(TimeStampMixin, SoftDeleteMixin):
+    """返信添付メディア"""
+
+    class MediaType(models.TextChoices):
+        IMAGE = 'image', '画像'
+        AUDIO = 'audio', '音声'
+        VIDEO = 'video', '動画'
+        OTHER = 'other', 'その他'
+
+    reply = models.ForeignKey(
+        Reply, on_delete=models.CASCADE,
+        related_name='media_files',
+        verbose_name='返信',
+    )
+    file = models.FileField(
+        'ファイル', upload_to=reply_media_path,
+        validators=[FileExtensionValidator(
+            allowed_extensions=[
+                'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+                'mp3', 'wav', 'ogg', 'm4a',
+                'mp4', 'webm', 'mov', 'avi',
+                'pdf', 'doc', 'docx', 'txt',
+            ]
+        )],
+    )
+    media_type = models.CharField(
+        'メディア種別', max_length=10,
+        choices=MediaType.choices, default=MediaType.OTHER,
+    )
+    file_size = models.PositiveIntegerField('ファイルサイズ（バイト）', default=0)
+    original_name = models.CharField('元ファイル名', max_length=255, blank=True)
+
+    class Meta:
+        verbose_name = '返信メディア'
+        verbose_name_plural = '返信メディア'
+
+    def __str__(self):
+        return self.original_name or os.path.basename(self.file.name)
+
+    def save(self, *args, **kwargs):
+        if self.file and not self.file_size:
+            self.file_size = self.file.size
+        if not self.original_name and self.file:
+            self.original_name = os.path.basename(self.file.name)
+        if not self.media_type or self.media_type == self.MediaType.OTHER:
+            self.media_type = self._detect_media_type()
+        super().save(*args, **kwargs)
+
+    def _detect_media_type(self):
+        """ファイル拡張子からメディア種別を判定"""
+        if not self.file:
+            return self.MediaType.OTHER
+        ext = os.path.splitext(self.file.name)[1].lower()
+        if ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'):
+            return self.MediaType.IMAGE
+        elif ext in ('.mp3', '.wav', '.ogg', '.m4a'):
+            return self.MediaType.AUDIO
+        elif ext in ('.mp4', '.webm', '.mov', '.avi'):
+            return self.MediaType.VIDEO
+        return self.MediaType.OTHER
 
 
 class AIAnnotation(TimeStampMixin):

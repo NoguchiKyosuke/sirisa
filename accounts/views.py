@@ -12,8 +12,8 @@ from django.utils import timezone
 from datetime import timedelta
 from django.views import View
 
-from .forms import LoginForm, RegisterForm, VerifyForm, ProfileForm, EmailChangeForm
-from .models import EmailVerification
+from .forms import LoginForm, RegisterForm, VerifyForm, ProfileForm, EmailChangeForm, UserReportForm
+from .models import EmailVerification, UserReport
 from .gmail_service import send_verification_email
 
 logger = logging.getLogger(__name__)
@@ -278,3 +278,71 @@ class AccountDeleteView(LoginRequiredMixin, View):
         logout(request)
         messages.info(request, 'アカウントを削除しました。')
         return redirect('accounts:login')
+
+
+class UserProfileView(LoginRequiredMixin, View):
+    """他ユーザのプロフィール閲覧"""
+    login_url = '/accounts/login/'
+
+    def get(self, request, username):
+        target_user = User.objects.filter(username=username, is_deleted=False).first()
+        if not target_user:
+            messages.error(request, 'ユーザが見つかりませんでした。')
+            return redirect('home')
+
+        # 自分自身のプロフィールなら設定画面にリダイレクト
+        if target_user == request.user:
+            return redirect('accounts:profile')
+
+        from questions.models import Question, Answer
+        question_count = Question.objects.filter(user=target_user, is_deleted=False).count()
+        answer_count = Answer.objects.filter(user=target_user, is_deleted=False).count()
+
+        report_form = UserReportForm()
+
+        return render(request, 'accounts/user_profile.html', {
+            'target_user': target_user,
+            'question_count': question_count,
+            'answer_count': answer_count,
+            'report_form': report_form,
+        })
+
+
+class UserReportView(LoginRequiredMixin, View):
+    """ユーザ通報"""
+    login_url = '/accounts/login/'
+
+    def post(self, request, username):
+        target_user = User.objects.filter(username=username, is_deleted=False).first()
+        if not target_user:
+            messages.error(request, 'ユーザが見つかりませんでした。')
+            return redirect('home')
+
+        if target_user == request.user:
+            messages.error(request, '自分自身を通報することはできません。')
+            return redirect('accounts:user_profile', username=username)
+
+        # 重複通報チェック（同じユーザへの通報は1日1回まで）
+        from datetime import timedelta
+        recent_report = UserReport.objects.filter(
+            reporter=request.user,
+            reported_user=target_user,
+            created_at__gte=timezone.now() - timedelta(hours=24),
+        ).exists()
+        if recent_report:
+            messages.warning(request, '同じユーザへの通報は24時間に1回までです。')
+            return redirect('accounts:user_profile', username=username)
+
+        form = UserReportForm(request.POST)
+        if form.is_valid():
+            UserReport.objects.create(
+                reporter=request.user,
+                reported_user=target_user,
+                reason=form.cleaned_data['reason'],
+                detail=form.cleaned_data.get('detail', ''),
+            )
+            messages.success(request, 'ユーザを通報しました。ご報告ありがとうございます。')
+        else:
+            messages.error(request, '通報内容に不備があります。')
+
+        return redirect('accounts:user_profile', username=username)

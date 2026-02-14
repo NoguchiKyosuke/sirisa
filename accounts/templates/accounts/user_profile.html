@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+{% block title %}{{ target_user.username }} のプロフィール{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <!-- プロフィールカード -->
+        <div class="card p-4 mb-4">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h3 class="mb-1"><i class="bi bi-person-circle"></i> {{ target_user.username }}</h3>
+                    <span class="badge bg-secondary">{{ target_user.get_role_display }}</span>
+                    <span class="text-muted small ms-2">登録日: {{ target_user.date_joined|date:"Y-m-d" }}</span>
+                </div>
+                <button type="button" class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#reportModal">
+                    <i class="bi bi-flag"></i> 通報
+                </button>
+            </div>
+
+            {% if target_user.bio %}
+            <div class="mt-3">
+                <p class="mb-0">{{ target_user.bio }}</p>
+            </div>
+            {% endif %}
+
+            <div class="border-top mt-3 pt-3">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h5 class="mb-0">{{ question_count }}</h5>
+                        <small class="text-muted">質問</small>
+                    </div>
+                    <div class="col-6">
+                        <h5 class="mb-0">{{ answer_count }}</h5>
+                        <small class="text-muted">回答</small>
+                    </div>
+                </div>
+            </div>
+
+            {% if target_user.occupation or target_user.workplace_school or target_user.grade or target_user.age %}
+            <div class="border-top mt-3 pt-3">
+                <h6 class="text-muted mb-2">プロフィール情報</h6>
+                <table class="table table-sm mb-0">
+                    {% if target_user.occupation %}
+                    <tr>
+                        <th class="text-muted" style="width: 120px;"><i class="bi bi-briefcase"></i> 職業・身分</th>
+                        <td>{{ target_user.occupation }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if target_user.workplace_school %}
+                    <tr>
+                        <th class="text-muted"><i class="bi bi-building"></i> 所属</th>
+                        <td>{{ target_user.workplace_school }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if target_user.grade %}
+                    <tr>
+                        <th class="text-muted"><i class="bi bi-mortarboard"></i> 学年・役職</th>
+                        <td>{{ target_user.grade }}</td>
+                    </tr>
+                    {% endif %}
+                    {% if target_user.age %}
+                    <tr>
+                        <th class="text-muted"><i class="bi bi-calendar"></i> 年齢</th>
+                        <td>{{ target_user.age }}歳</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+        <a href="javascript:history.back()" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> 戻る
+        </a>
+    </div>
+</div>
+
+<!-- 通報モーダル -->
+<div class="modal fade" id="reportModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title text-danger"><i class="bi bi-flag"></i> ユーザを通報</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="post" action="{% url 'accounts:user_report' target_user.username %}">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="text-muted mb-3">{{ target_user.username }} さんを通報する理由を選択してください。</p>
+                    <div class="mb-3">
+                        {% for radio in report_form.reason %}
+                        <div class="form-check mb-2">
+                            {{ radio.tag }}
+                            <label class="form-check-label" for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label for="id_detail" class="form-label">{{ report_form.detail.label }}</label>
+                        {{ report_form.detail }}
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                    <button type="submit" class="btn btn-danger">通報する</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

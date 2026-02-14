@@ -1,0 +1,46 @@
+<div class="d-flex gap-2 mb-2 ms-3 p-2 rounded reply-item" id="reply-{{ reply.pk }}" data-reply-id="{{ reply.pk }}" style="background: var(--bs-tertiary-bg, #f8f9fa);">
+    <div class="flex-grow-1">
+        <div class="d-flex justify-content-between align-items-center">
+            <small>
+                {% if reply.is_ai_generated %}
+                <span class="ai-badge"><i class="bi bi-robot"></i> AI</span>
+                {% else %}
+                <strong><a href="{% url 'accounts:user_profile' reply.user.username %}" class="text-decoration-none">{{ reply.user.username }}</a></strong>
+                {% endif %}
+                <span class="text-muted ms-1">{{ reply.created_at|date:"m/d H:i" }}</span>
+            </small>
+            {% if reply.user == user or answer.question.user == user %}
+            <button type="button" class="btn btn-sm text-muted p-0 reply-delete-btn" title="削除"
+                    data-reply-id="{{ reply.pk }}" data-delete-url="{% url 'questions:reply_delete' reply.pk %}">
+                <i class="bi bi-x-lg"></i>
+            </button>
+            {% endif %}
+        </div>
+        {% if reply.is_ai_generated and reply.ai_generation_status == 'pending' %}
+        <div class="text-muted small ai-reply-pending" data-reply-id="{{ reply.pk }}">
+            <i class="bi bi-hourglass-split"></i> AI返信を生成中...
+        </div>
+        {% elif reply.is_ai_generated %}
+        <div class="small mt-1 ai-reply-body">{{ reply.body|safe }}</div>
+        {% else %}
+        <div class="small mt-1">{{ reply.body|linebreaksbr }}</div>
+        {% endif %}
+        {% if reply.media_files.all %}
+        <div class="mt-1">
+            {% for media in reply.media_files.all %}
+            {% if media.media_type == 'image' %}
+            <img src="{{ media.file.url }}" class="img-fluid rounded mt-1" style="max-height: 200px;" alt="{{ media.original_name }}">
+            {% elif media.media_type == 'audio' %}
+            <audio controls class="w-100 mt-1"><source src="{{ media.file.url }}"></audio>
+            {% elif media.media_type == 'video' %}
+            <video controls class="w-100 rounded mt-1" style="max-height: 200px;"><source src="{{ media.file.url }}"></video>
+            {% else %}
+            <a href="{{ media.file.url }}" class="btn btn-outline-secondary btn-sm mt-1">
+                <i class="bi bi-download"></i> {{ media.original_name }}
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>

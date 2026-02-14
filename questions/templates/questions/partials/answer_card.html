@@ -11,7 +11,7 @@
                 <small class="text-muted">({{ answer.ai_model }})</small>
                 {% else %}
                 <i class="bi bi-person"></i>
-                <strong>{{ answer.user.username }}</strong>
+                <strong><a href="{% url 'accounts:user_profile' answer.user.username %}" class="text-decoration-none">{{ answer.user.username }}</a></strong>
                 {% endif %}
                 <span class="text-muted small ms-2">{{ answer.created_at|date:"Y-m-d H:i" }}</span>
             </div>
@@ -79,46 +79,25 @@
                 </button>
             </div>
             <div class="collapse {% if answer.reply_list %}show{% endif %}" id="replies-{{ answer.pk }}">
+                <div class="reply-list" id="reply-list-{{ answer.pk }}">
                 {% for reply in answer.reply_list %}
-                <div class="d-flex gap-2 mb-2 ms-3 p-2 rounded" style="background: var(--bs-tertiary-bg, #f8f9fa);">
-                    <div class="flex-grow-1">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <small>
-                                {% if reply.is_ai_generated %}
-                                <span class="ai-badge"><i class="bi bi-robot"></i> AI</span>
-                                {% else %}
-                                <strong>{{ reply.user.username }}</strong>
-                                {% endif %}
-                                <span class="text-muted ms-1">{{ reply.created_at|date:"m/d H:i" }}</span>
-                            </small>
-                            {% if reply.user == user or answer.question.user == user %}
-                            <form method="post" action="{% url 'questions:reply_delete' reply.pk %}" class="d-inline">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-sm text-muted p-0" title="削除"
-                                        onclick="return confirm('この返信を削除しますか？')">
-                                    <i class="bi bi-x-lg"></i>
-                                </button>
-                            </form>
-                            {% endif %}
-                        </div>
-                        {% if reply.is_ai_generated and reply.ai_generation_status == 'pending' %}
-                        <div class="text-muted small"><i class="bi bi-hourglass-split"></i> AI返信を生成中...</div>
-                        {% elif reply.is_ai_generated %}
-                        <div class="small mt-1 ai-reply-body">{{ reply.body|safe }}</div>
-                        {% else %}
-                        <div class="small mt-1">{{ reply.body|linebreaksbr }}</div>
-                        {% endif %}
-                    </div>
-                </div>
+                {% include 'questions/partials/reply_item.html' with reply=reply answer=answer %}
                 {% endfor %}
+                </div>
                 <!-- 返信フォーム -->
-                <form method="post" action="{% url 'questions:reply_create' answer.pk %}" class="ms-3 mt-2">
+                <form class="ms-3 mt-2 reply-form" data-answer-id="{{ answer.pk }}" data-url="{% url 'questions:reply_create' answer.pk %}" enctype="multipart/form-data">
                     {% csrf_token %}
                     <div class="input-group input-group-sm">
                         <textarea name="body" class="form-control reply-textarea" rows="1" placeholder="返信を入力... @ai でAIに質問できます" required
-                                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();this.closest('form').submit();}"></textarea>
+                                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();submitReplyForm(this.closest('form'));}"></textarea>
+                        <label class="btn btn-outline-secondary btn-sm mb-0" title="ファイル添付">
+                            <i class="bi bi-paperclip"></i>
+                            <input type="file" name="reply_files" multiple class="d-none reply-file-input"
+                                   accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt" onchange="showReplyFileNames(this)">
+                        </label>
                         <button type="submit" class="btn btn-sirisa btn-sm"><i class="bi bi-send"></i></button>
                     </div>
+                    <div class="reply-file-names small text-muted mt-1" style="display:none;"></div>
                 </form>
             </div>
         </div>

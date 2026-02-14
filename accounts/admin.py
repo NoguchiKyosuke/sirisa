@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, EmailVerification
+from .models import User, EmailVerification, UserReport
 
 
 @admin.register(User)
@@ -10,7 +10,7 @@ class UserAdmin(BaseUserAdmin):
     search_fields = ('email', 'username')
     ordering = ('-date_joined',)
     fieldsets = BaseUserAdmin.fieldsets + (
-        ('追加情報', {'fields': ('role', 'is_verified')}),
+        ('追加情報', {'fields': ('role', 'is_verified', 'occupation', 'workplace_school', 'grade', 'age', 'bio')}),
     )
 
 
@@ -20,3 +20,11 @@ class EmailVerificationAdmin(admin.ModelAdmin):
     list_filter = ('is_used',)
     search_fields = ('user__email',)
     readonly_fields = ('code', 'created_at')
+
+
+@admin.register(UserReport)
+class UserReportAdmin(admin.ModelAdmin):
+    list_display = ('reporter', 'reported_user', 'reason', 'created_at', 'is_resolved')
+    list_filter = ('reason', 'is_resolved')
+    search_fields = ('reporter__username', 'reported_user__username')
+    readonly_fields = ('reporter', 'reported_user', 'reason', 'detail', 'created_at')

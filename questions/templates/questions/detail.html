@@ -91,7 +91,7 @@
                 <div>
                     <h3 class="mb-1">{{ question.title }}</h3>
                     <div class="text-muted small">
-                        <i class="bi bi-person"></i> {{ question.user.username }}
+                        <i class="bi bi-person"></i> <a href="{% url 'accounts:user_profile' question.user.username %}" class="text-decoration-none">{{ question.user.username }}</a>
                         <span class="mx-1">|</span>
                         <i class="bi bi-clock"></i> {{ question.created_at|date:"Y-m-d H:i" }}
                         <span class="mx-1">|</span>
@@ -256,17 +256,16 @@ let selectedAnnotationData = null;
 // Shadow DOM内の.mermaid要素を取り出し、mermaid.render() APIでレンダリングする。
 function sanitizeMermaidCode(code) {
     // Mermaid.jsでパースエラーを起こす文字をエスケープする
-    // ノードラベル内の丸括弧 () をテキストノード用の引用符で囲む
+    // ノードラベル内の丸括弧 () や中括弧 {} をテキストノード用の引用符で囲む
     // 例: A[圧縮 (情報の損失)] → A["圧縮 (情報の損失)"]
-    // ノード定義: ID[label], ID(label), ID{label}, ID((label)) 等
-    // ラベル内にパースエラーを起こす文字がある場合、引用符で囲む
+    // 例: A[a_{n+1} = ...] → A["a_{n+1} = ..."]
     var lines = code.split('\n');
     var result = [];
     for (var i = 0; i < lines.length; i++) {
         var line = lines[i];
         // ノードラベルを検出して引用符で囲む
-        // パターン: ID[...] または ID[...|...] 形式のラベル内に ( ) がある場合
-        line = line.replace(/(\w+)\[([^\]]*\([^\]]*)\]/g, function(match, id, label) {
+        // パターン: ID[...] 形式のラベル内に ( ) や { } がある場合
+        line = line.replace(/(\w+)\[([^\]]*[\(\{\}][^\]]*)\]/g, function(match, id, label) {
             // ラベルが既に引用符で囲まれている場合はスキップ
             if (/^".*"$/.test(label.trim())) return match;
             return id + '["' + label.replace(/"/g, '#quot;') + '"]';
@@ -366,6 +365,55 @@ function initShadowDOM() {
         katexCSS.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
         shadow.appendChild(katexCSS);
 
+        // ダークモード対応CSS をShadow DOM内に注入
+        const darkModeStyle = document.createElement('style');
+        darkModeStyle.textContent = `
+            :host-context([data-bs-theme="dark"]) .shadow-content {
+                color: #e0e0e0;
+                background-color: transparent;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content h1,
+            :host-context([data-bs-theme="dark"]) .shadow-content h2,
+            :host-context([data-bs-theme="dark"]) .shadow-content h3,
+            :host-context([data-bs-theme="dark"]) .shadow-content h4,
+            :host-context([data-bs-theme="dark"]) .shadow-content h5,
+            :host-context([data-bs-theme="dark"]) .shadow-content h6 {
+                color: #f0f0f0;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content a {
+                color: #5dade2;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content table,
+            :host-context([data-bs-theme="dark"]) .shadow-content th,
+            :host-context([data-bs-theme="dark"]) .shadow-content td {
+                border-color: #444;
+                color: #e0e0e0;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content pre,
+            :host-context([data-bs-theme="dark"]) .shadow-content code {
+                background-color: #1a1a2e;
+                color: #e0e0e0;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content blockquote {
+                border-left-color: #5dade2;
+                color: #ccc;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content .slide {
+                background-color: #16213e;
+                color: #e0e0e0;
+            }
+            :host-context([data-bs-theme="dark"]) .shadow-content svg text {
+                fill: #e0e0e0;
+            }
+            /* Fallback for browsers not supporting :host-context */
+            @media (prefers-color-scheme: dark) {
+                .shadow-content {
+                    color: #e0e0e0;
+                }
+            }
+        `;
+        shadow.appendChild(darkModeStyle);
+
         // コンテンツコンテナ作成
         const container = document.createElement('div');
         container.className = 'shadow-content';
@@ -443,6 +491,21 @@ function initShadowDOM() {
             if (!oldScript.src) loadNext(idx + 1);
         };
         loadNext(0);
+
+        // Shadow DOM内のonclick属性をaddEventListenerに変換
+        // Shadow DOM内のonclickはグローバルスコープにアクセスできないため
+        container.querySelectorAll('[onclick]').forEach(function(el) {
+            var code = el.getAttribute('onclick');
+            el.removeAttribute('onclick');
+            el.addEventListener('click', function(e) {
+                try {
+                    var fn = new Function(code);
+                    fn.call(el);
+                } catch (err) {
+                    console.warn('Shadow DOM onclick error:', err);
+                }
+            });
+        });
 
         // KaTeX レンダリング（Shadow DOM内）
         // auto-render.min.js が未ロードの場合はリトライする
@@ -929,7 +992,211 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         }
     });
+
+    // 返信フォームAJAX化
+    initReplyForms();
+
+    // AI返信のポーリング開始（ページ読み込み時にpending状態のものがあれば）
+    document.querySelectorAll('.ai-reply-pending').forEach(function(el) {
+        var replyId = el.dataset.replyId;
+        if (replyId) pollReplyStatus(replyId);
+    });
+
+    // 返信削除ボタンのイベント委譲
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.reply-delete-btn');
+        if (!btn) return;
+        e.preventDefault();
+        if (!confirm('この返信を削除しますか？')) return;
+        var url = btn.dataset.deleteUrl;
+        var replyId = btn.dataset.replyId;
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'ok') {
+                var el = document.getElementById('reply-' + replyId);
+                if (el) el.remove();
+            }
+        });
+    });
 });
+
+// ===== 返信フォームAJAX送信 =====
+function initReplyForms() {
+    document.querySelectorAll('.reply-form').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            submitReplyForm(form);
+        });
+    });
+}
+
+function submitReplyForm(form) {
+    var textarea = form.querySelector('textarea[name="body"]');
+    var body = textarea.value.trim();
+    if (!body) return;
+
+    var url = form.dataset.url;
+    var answerId = form.dataset.answerId;
+    var submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+
+    var formData = new FormData(form);
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken,
+            'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData,
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.status === 'ok') {
+            // 返信HTMLを追加
+            var replyList = document.getElementById('reply-list-' + answerId);
+            if (replyList) {
+                replyList.insertAdjacentHTML('beforeend', data.reply_html);
+            }
+            // フォームリセット
+            textarea.value = '';
+            var fileInput = form.querySelector('.reply-file-input');
+            if (fileInput) fileInput.value = '';
+            var fileNames = form.querySelector('.reply-file-names');
+            if (fileNames) { fileNames.style.display = 'none'; fileNames.textContent = ''; }
+
+            // 返信セクションを開く
+            var collapseEl = document.getElementById('replies-' + answerId);
+            if (collapseEl && !collapseEl.classList.contains('show')) {
+                new bootstrap.Collapse(collapseEl, { show: true });
+            }
+
+            // AI返信のポーリング
+            if (data.ai_reply_pending) {
+                // AI返信はまだ作成されていない(Celeryが非同期で作る)ので少し待ってからポーリング
+                setTimeout(function() { pollNewAIReply(answerId); }, 3000);
+            }
+
+            // KaTeX再レンダリング
+            if (typeof renderMathInElement !== 'undefined') {
+                renderMathInElement(replyList, {
+                    delimiters: [
+                        {left: '$$', right: '$$', display: true},
+                        {left: '$', right: '$', display: false},
+                    ],
+                });
+            }
+        }
+    })
+    .catch(function(err) {
+        console.error('Reply submit error:', err);
+    })
+    .finally(function() {
+        submitBtn.disabled = false;
+    });
+}
+
+function showReplyFileNames(input) {
+    var container = input.closest('form').querySelector('.reply-file-names');
+    if (!container) return;
+    if (input.files.length > 0) {
+        var names = Array.from(input.files).map(function(f) { return f.name; }).join(', ');
+        container.textContent = '📎 ' + names;
+        container.style.display = 'block';
+    } else {
+        container.style.display = 'none';
+    }
+}
+
+// ===== AI返信ポーリング =====
+function pollReplyStatus(replyId) {
+    var interval = setInterval(function() {
+        fetch('/questions/api/replies/' + replyId + '/status/', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.status === 'completed') {
+                clearInterval(interval);
+                // pendingメッセージ要素を完了した返信HTMLに置き換え
+                var pendingEl = document.querySelector('.ai-reply-pending[data-reply-id="' + replyId + '"]');
+                if (pendingEl) {
+                    var replyItem = pendingEl.closest('.reply-item');
+                    if (replyItem) {
+                        replyItem.outerHTML = data.reply_html;
+                    }
+                }
+                // KaTeX再レンダリング
+                if (typeof renderMathInElement !== 'undefined') {
+                    renderMathInElement(document.getElementById('reply-' + replyId) || document.body, {
+                        delimiters: [
+                            {left: '$$', right: '$$', display: true},
+                            {left: '$', right: '$', display: false},
+                        ],
+                    });
+                }
+            } else if (data.status === 'failed') {
+                clearInterval(interval);
+                var pendingEl = document.querySelector('.ai-reply-pending[data-reply-id="' + replyId + '"]');
+                if (pendingEl) {
+                    pendingEl.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-triangle"></i> AI返信の生成に失敗しました</span>';
+                }
+            }
+        })
+        .catch(function() { clearInterval(interval); });
+    }, 4000);
+}
+
+function pollNewAIReply(answerId) {
+    // 新たに作られたAI返信を見つけるために返信リストを確認
+    // Celeryがまだ返信を作成していない可能性があるため少し間隔を空けてチェック
+    var checkCount = 0;
+    var checkInterval = setInterval(function() {
+        checkCount++;
+        if (checkCount > 15) { clearInterval(checkInterval); return; }  // 最大60秒
+
+        // ページ内のpending AI返信をチェック
+        var pendingEls = document.querySelectorAll('#reply-list-' + answerId + ' .ai-reply-pending');
+        if (pendingEls.length > 0) {
+            pendingEls.forEach(function(el) {
+                var replyId = el.dataset.replyId;
+                if (replyId && !el.dataset.polling) {
+                    el.dataset.polling = 'true';
+                    pollReplyStatus(replyId);
+                }
+            });
+            clearInterval(checkInterval);
+            return;
+        }
+
+        // まだ返信が追加されていない場合ページをリフレッシュせずにAPIで確認
+        // 最新のAI返信を取得するためにanswerの返信をfetchする方法もあるが
+        // 単純にページリロードより、一旦最新の返信リストをリロードする
+        fetch('/questions/api/answers/' + answerId + '/replies/', {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.pending_reply_id) {
+                // 返信リストにAI返信のpending表示を追加
+                var replyList = document.getElementById('reply-list-' + answerId);
+                if (replyList && !document.getElementById('reply-' + data.pending_reply_id)) {
+                    replyList.insertAdjacentHTML('beforeend', data.reply_html);
+                    pollReplyStatus(data.pending_reply_id);
+                    clearInterval(checkInterval);
+                }
+            }
+        })
+        .catch(function() {});
+    }, 4000);
+}
 
 // htmx更新後にもShadow DOM初期化とKaTeXレンダリング
 document.addEventListener('htmx:afterSwap', function() {

@@ -46,6 +46,9 @@
         [data-bs-theme="dark"] .reaction-btn:hover, [data-bs-theme="dark"] .reaction-btn.active { background: #1a3a5c; }
         .reaction-btn [data-count] { color: #333; }
         [data-bs-theme="dark"] .reaction-btn [data-count] { color: #e0e0e0; }
+        /* AI返信ボディのダークモード対応 */
+        [data-bs-theme="dark"] .ai-reply-body { color: #e0e0e0; }
+        [data-bs-theme="dark"] .ai-reply-body a { color: #5dade2; }
         .answer-collapsed { max-height: 200px; overflow: hidden; position: relative; }
         .answer-collapsed::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0;
                                    height: 60px; background: linear-gradient(transparent, var(--bs-body-bg, white)); }

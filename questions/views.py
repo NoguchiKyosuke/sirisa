@@ -16,7 +16,7 @@ import bleach
 from .models import (
     Question, QuestionMedia, Answer, AnswerMedia,
     Reaction, Subject, QuestionDraft, AnswerDraft,
-    Reply, AIAnnotation, AIUsageLog,
+    Reply, ReplyMedia, AIAnnotation, AIUsageLog,
 )
 from .forms import QuestionForm, AnswerForm, ReplyForm
 from .tasks import generate_ai_answer, generate_ai_reply
@@ -333,7 +333,7 @@ class QuestionDetailView(LoginRequiredMixin, View):
         answers = answers.annotate(
             positive_count=Count(
                 'reactions',
-                filter=Q(reactions__emoji_type__in=['thumbs_up', 'heart', 'celebration', 'idea'])
+                filter=Q(reactions__emoji_type='thumbs_up')
             ),
             negative_count=Count(
                 'reactions',
@@ -375,9 +375,6 @@ class QuestionDetailView(LoginRequiredMixin, View):
                 reaction_counts[r['emoji_type']] = r['cnt']
             answer.thumbs_up_count = reaction_counts.get('thumbs_up', 0) or ''
             answer.thumbs_down_count = reaction_counts.get('thumbs_down', 0) or ''
-            answer.heart_count = reaction_counts.get('heart', 0) or ''
-            answer.celebration_count = reaction_counts.get('celebration', 0) or ''
-            answer.idea_count = reaction_counts.get('idea', 0) or ''
             # 返信一覧
             answer.reply_list = answer.replies.filter(is_deleted=False).select_related('user')
             # 注釈一覧
@@ -571,9 +568,6 @@ class AnswerStatusAPIView(LoginRequiredMixin, View):
                 reaction_counts[r['emoji_type']] = r['cnt']
             answer.thumbs_up_count = reaction_counts.get('thumbs_up', 0) or ''
             answer.thumbs_down_count = reaction_counts.get('thumbs_down', 0) or ''
-            answer.heart_count = reaction_counts.get('heart', 0) or ''
-            answer.celebration_count = reaction_counts.get('celebration', 0) or ''
-            answer.idea_count = reaction_counts.get('idea', 0) or ''
             return render(request, 'questions/partials/answer_card.html', {
                 'answer': answer,
             })
@@ -582,9 +576,6 @@ class AnswerStatusAPIView(LoginRequiredMixin, View):
             answer.user_reactions = []
             answer.thumbs_up_count = ''
             answer.thumbs_down_count = ''
-            answer.heart_count = ''
-            answer.celebration_count = ''
-            answer.idea_count = ''
             return render(request, 'questions/partials/answer_card.html', {
                 'answer': answer,
             })
@@ -624,11 +615,11 @@ class QuestionExportView(LoginRequiredMixin, View):
 # ===== 返信機能 =====
 
 class ReplyCreateView(LoginRequiredMixin, View):
-    """回答への返信投稿"""
+    """回答への返信投稿（AJAX対応）"""
 
     def post(self, request, pk):
         answer = get_object_or_404(Answer, pk=pk, is_deleted=False)
-        form = ReplyForm(request.POST)
+        form = ReplyForm(request.POST, request.FILES)
         if form.is_valid():
             body = form.cleaned_data['body']
 
@@ -638,13 +629,43 @@ class ReplyCreateView(LoginRequiredMixin, View):
                 body=body,
             )
 
+            # メディアファイル保存
+            files = request.FILES.getlist('reply_files')
+            for f in files:
+                ReplyMedia.objects.create(
+                    reply=reply,
+                    file=f,
+                    file_size=f.size,
+                    original_name=f.name,
+                )
+
+            ai_reply_pending = False
+
             # @ai メンションの検出
             if '@ai' in body.lower():
                 if AIUsageLog.can_use(request.user):
                     # AI返信をCeleryで非同期生成
                     generate_ai_reply.delay(reply.pk, request.user.pk)
+                    ai_reply_pending = True
                 else:
-                    messages.warning(request, '本日のAI使用回数（100回）に達しました。')
+                    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                        pass  # AJAX時はメッセージをJSON応答に含めない
+                    else:
+                        messages.warning(request, '本日のAI使用回数（100回）に達しました。')
+
+            # AJAXリクエストの場合はJSON+部分HTMLを返す
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                reply_html = render(request, 'questions/partials/reply_item.html', {
+                    'reply': reply,
+                    'answer': answer,
+                    'user': request.user,
+                }).content.decode('utf-8')
+                return JsonResponse({
+                    'status': 'ok',
+                    'reply_html': reply_html,
+                    'ai_reply_pending': ai_reply_pending,
+                    'answer_id': answer.pk,
+                })
 
         return redirect('questions:detail', pk=answer.question.pk)
 
@@ -657,7 +678,68 @@ class ReplyDeleteView(LoginRequiredMixin, View):
         question_pk = reply.answer.question.pk
         if reply.user == request.user or reply.answer.question.user == request.user:
             reply.soft_delete(user=request.user, description='返信を削除')
+
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return JsonResponse({'status': 'ok'})
         return redirect('questions:detail', pk=question_pk)
+
+
+class ReplyStatusAPIView(LoginRequiredMixin, View):
+    """AI返信ステータス確認API（ポーリング用）"""
+
+    def get(self, request, pk):
+        try:
+            reply = Reply.objects.select_related('user').get(pk=pk)
+        except Reply.DoesNotExist:
+            return JsonResponse({'status': 'not_found'}, status=404)
+
+        if reply.ai_generation_status == 'completed':
+            reply_html = render(request, 'questions/partials/reply_item.html', {
+                'reply': reply,
+                'answer': reply.answer,
+                'user': request.user,
+            }).content.decode('utf-8')
+            return JsonResponse({
+                'status': 'completed',
+                'reply_html': reply_html,
+            })
+        elif reply.ai_generation_status == 'failed':
+            return JsonResponse({
+                'status': 'failed',
+                'body': reply.body,
+            })
+        else:
+            return JsonResponse({'status': 'pending'})
+
+
+class AnswerRepliesAPIView(LoginRequiredMixin, View):
+    """回答の最新返信を取得するAPI（AI返信ポーリング用）"""
+
+    def get(self, request, pk):
+        try:
+            answer = Answer.objects.get(pk=pk, is_deleted=False)
+        except Answer.DoesNotExist:
+            return JsonResponse({'error': 'Answer not found'}, status=404)
+
+        # 最新のpending AI返信を検索
+        pending_reply = answer.replies.filter(
+            is_deleted=False,
+            is_ai_generated=True,
+            ai_generation_status='pending',
+        ).order_by('-created_at').first()
+
+        if pending_reply:
+            reply_html = render(request, 'questions/partials/reply_item.html', {
+                'reply': pending_reply,
+                'answer': answer,
+                'user': request.user,
+            }).content.decode('utf-8')
+            return JsonResponse({
+                'pending_reply_id': pending_reply.pk,
+                'reply_html': reply_html,
+            })
+
+        return JsonResponse({'pending_reply_id': None})
 
 
 # ===== AI注釈 API =====

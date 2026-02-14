@@ -74,12 +74,59 @@ class ProfileForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ['username']
+        fields = ['username', 'occupation', 'workplace_school', 'grade', 'age', 'bio']
         widgets = {
             'username': forms.TextInput(attrs={
                 'class': 'form-control',
             }),
+            'occupation': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '例: 高校生、大学生、会社員、教師',
+            }),
+            'workplace_school': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '例: ○○高校、△△大学',
+            }),
+            'grade': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': '例: 高校2年、学部3年',
+            }),
+            'age': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': 1,
+                'max': 150,
+            }),
+            'bio': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': '自己紹介を入力（500文字まで）',
+                'maxlength': 500,
+            }),
         }
+
+
+class UserReportForm(forms.Form):
+    """ユーザ通報フォーム"""
+    reason = forms.ChoiceField(
+        label='通報理由',
+        choices=[],  # __init__でセット
+        widget=forms.RadioSelect(attrs={'class': 'form-check-input'}),
+    )
+    detail = forms.CharField(
+        label='詳細（任意）',
+        required=False,
+        max_length=500,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': '具体的な内容を記述してください',
+        }),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .models import UserReport
+        self.fields['reason'].choices = UserReport.Reason.choices
 
 
 class EmailChangeForm(forms.Form):

@@ -30,6 +30,16 @@ class User(AbstractUser):
     original_email = models.EmailField('削除前メールアドレス', blank=True, default='')
     original_username = models.CharField('削除前ユーザ名', max_length=150, blank=True, default='')
 
+    # プロフィール情報
+    occupation = models.CharField('職業・身分', max_length=100, blank=True,
+                                  help_text='例: 高校生、大学生、会社員、教師')
+    workplace_school = models.CharField('所属（学校・職場）', max_length=200, blank=True,
+                                        help_text='例: ○○高校、△△大学')
+    grade = models.CharField('学年・役職', max_length=50, blank=True,
+                             help_text='例: 高校2年、学部3年、主任')
+    age = models.PositiveIntegerField('年齢', null=True, blank=True)
+    bio = models.TextField('自己紹介', max_length=500, blank=True)
+
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
 
@@ -89,3 +99,40 @@ class EmailVerification(models.Model):
     def is_valid(self):
         """有効かどうか（未使用かつ期限内）"""
         return not self.is_used and not self.is_expired
+
+
+class UserReport(models.Model):
+    """ユーザ通報モデル"""
+
+    class Reason(models.TextChoices):
+        SPAM = 'spam', 'スパム・迷惑行為'
+        INAPPROPRIATE = 'inappropriate', '不適切なコンテンツ'
+        HARASSMENT = 'harassment', '嫌がらせ'
+        IMPERSONATION = 'impersonation', 'なりすまし'
+        OTHER = 'other', 'その他'
+
+    reporter = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='reports_made',
+        verbose_name='通報者',
+    )
+    reported_user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='reports_received',
+        verbose_name='被通報ユーザ',
+    )
+    reason = models.CharField(
+        '通報理由', max_length=20,
+        choices=Reason.choices,
+    )
+    detail = models.TextField('詳細', max_length=500, blank=True)
+    created_at = models.DateTimeField('通報日時', auto_now_add=True)
+    is_resolved = models.BooleanField('対応済み', default=False)
+
+    class Meta:
+        verbose_name = 'ユーザ通報'
+        verbose_name_plural = 'ユーザ通報'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.reporter.username} → {self.reported_user.username}: {self.get_reason_display()}'
