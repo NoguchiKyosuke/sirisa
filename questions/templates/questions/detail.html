@@ -440,10 +440,8 @@ function initShadowDOM() {
             }
             var oldScript = scripts[idx];
             var newScript = document.createElement('script');
-            // Mermaid CDNスクリプトとmermaid.initialize呼び出しはスキップ（別途処理）
-            var isMermaidScript = (oldScript.src && oldScript.src.indexOf('mermaid') !== -1) ||
-                                  (oldScript.textContent && oldScript.textContent.indexOf('mermaid.initialize') !== -1);
-            if (isMermaidScript) {
+            // Mermaid CDN外部スクリプトはスキップ（Shadow DOM内で別途 renderMermaidInShadow で処理）
+            if (oldScript.src && oldScript.src.indexOf('mermaid') !== -1) {
                 oldScript.remove();
                 loadNext(idx + 1);
                 return;
@@ -471,21 +469,28 @@ function initShadowDOM() {
                 code = code.replace(/document\.querySelectorAll\s*\(/g,
                     'window.__sr' + answerId + '.querySelectorAll(');
 
+                // mermaid.initialize() / mermaid.run() 呼び出しを除去
+                // （Shadow DOM内では renderMermaidInShadow() で別途処理するため）
+                // 複数行にまたがる呼び出しも除去
+                code = code.replace(/mermaid\.initialize\s*\(\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}\s*\)\s*;?/g, '/* mermaid.initialize removed */');
+                code = code.replace(/mermaid\.run\s*\([^)]*\)\s*;?/g, '/* mermaid.run removed */');
+
                 // IIFE内のfunction宣言をwindowにエクスポート
                 // (onclick属性からの呼び出しに必要 — Shadow DOM内ではグローバル関数参照不可のため)
                 var funcDeclRegex = /\bfunction\s+([a-zA-Z_$][\w$]*)\s*\(/g;
                 var funcExports = [];
                 var fm;
                 while ((fm = funcDeclRegex.exec(code)) !== null) {
-                    funcExports.push('window["' + fm[1] + '"]=' + fm[1] + ';');
+                    funcExports.push('try{window["' + fm[1] + '"]=' + fm[1] + ';}catch(e){}');
                 }
                 // var/let/const による関数代入もエクスポート
                 // 例: const showTab = function(name) { ... }
                 // 例: var toggleView = (id) => { ... }
                 var varFuncRegex = /\b(?:var|let|const)\s+([a-zA-Z_$][\w$]*)\s*=\s*(?:function|\(|[a-zA-Z_$][\w$]*\s*=>)/g;
                 while ((fm = varFuncRegex.exec(code)) !== null) {
-                    if (funcExports.indexOf('window["' + fm[1] + '"]=' + fm[1] + ';') === -1) {
-                        funcExports.push('window["' + fm[1] + '"]=' + fm[1] + ';');
+                    var exportLine = 'try{window["' + fm[1] + '"]=' + fm[1] + ';}catch(e){}';
+                    if (funcExports.indexOf(exportLine) === -1) {
+                        funcExports.push(exportLine);
                     }
                 }
                 if (funcExports.length > 0) {
