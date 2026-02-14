@@ -20,6 +20,11 @@ class User(AbstractUser):
         AI_AGENT = 'ai_agent', 'AIエージェント'
 
     email = models.EmailField('メールアドレス', unique=True)
+    firebase_uid = models.CharField(
+        'Firebase UID', max_length=128,
+        unique=True, null=True, blank=True,
+        help_text='Firebase Authentication のユーザ UID',
+    )
     role = models.CharField(
         'ロール', max_length=20,
         choices=Role.choices, default=Role.STUDENT,

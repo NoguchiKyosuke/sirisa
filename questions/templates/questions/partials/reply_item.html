@@ -1,5 +1,5 @@
-<div class="d-flex gap-2 mb-2 ms-3 p-2 rounded reply-item" id="reply-{{ reply.pk }}" data-reply-id="{{ reply.pk }}" style="background: var(--bs-tertiary-bg, #f8f9fa);">
-    <div class="flex-grow-1">
+<div class="d-flex gap-2 mb-2 ms-3 p-2 rounded reply-item" id="reply-{{ reply.pk }}" data-reply-id="{{ reply.pk }}" data-answer-id="{{ answer.pk }}" style="background: var(--bs-tertiary-bg, #f8f9fa);">
+    <div class="flex-grow-1 reply-body-area">
         <div class="d-flex justify-content-between align-items-center">
             <small>
                 {% if reply.is_ai_generated %}

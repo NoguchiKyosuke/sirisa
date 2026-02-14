@@ -1,6 +1,6 @@
 """
 SIRISA アカウントフォーム
-パスワードレス認証（メール認証のみ）
+Firebase 認証対応（パスワード不要）
 """
 from django import forms
 from django.contrib.auth import get_user_model
@@ -8,20 +8,8 @@ from django.contrib.auth import get_user_model
 User = get_user_model()
 
 
-class LoginForm(forms.Form):
-    """ログインフォーム（メールアドレスのみ）"""
-    email = forms.EmailField(
-        label='メールアドレス',
-        widget=forms.EmailInput(attrs={
-            'class': 'form-control',
-            'placeholder': 'email@example.com',
-            'autofocus': True,
-        }),
-    )
-
-
 class RegisterForm(forms.ModelForm):
-    """新規登録フォーム（パスワードなし）"""
+    """新規登録フォーム（Firebase 認証後にユーザ名のみ入力）"""
 
     class Meta:
         model = User
@@ -31,10 +19,7 @@ class RegisterForm(forms.ModelForm):
                 'class': 'form-control',
                 'placeholder': 'ユーザ名',
             }),
-            'email': forms.EmailInput(attrs={
-                'class': 'form-control',
-                'placeholder': 'email@example.com',
-            }),
+            'email': forms.HiddenInput(),
         }
 
     def clean_email(self):
@@ -51,22 +36,6 @@ class RegisterForm(forms.ModelForm):
         if commit:
             user.save()
         return user
-
-
-class VerifyForm(forms.Form):
-    """メール認証コード入力フォーム"""
-    code = forms.CharField(
-        label='認証コード（6桁）',
-        max_length=6,
-        min_length=6,
-        widget=forms.TextInput(attrs={
-            'class': 'form-control form-control-lg text-center',
-            'placeholder': '000000',
-            'pattern': '[0-9]{6}',
-            'inputmode': 'numeric',
-            'autofocus': True,
-        }),
-    )
 
 
 class ProfileForm(forms.ModelForm):

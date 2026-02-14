@@ -1,158 +1,181 @@
 """
 SIRISA アカウントビュー
-パスワードレス認証（メール認証コードでログイン・登録）
+Firebase 認証（メールリンク + Google サインイン）
 プロフィール管理
 """
+import json
 import logging
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, logout, get_user_model
+from django.contrib.auth import authenticate, login, logout, get_user_model
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib import messages
+from django.http import JsonResponse
 from django.utils import timezone
-from datetime import timedelta
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import csrf_exempt
+from django.conf import settings
 
-from .forms import LoginForm, RegisterForm, VerifyForm, ProfileForm, EmailChangeForm, UserReportForm
-from .models import EmailVerification, UserReport
-from .gmail_service import send_verification_email
+from .forms import RegisterForm, ProfileForm, EmailChangeForm, UserReportForm
+from .models import UserReport
+from .firebase_auth import verify_id_token
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
+# ── Firebase 認証ビュー ──────────────────────────────────────
+
+
 class LoginView(View):
-    """ログイン画面（パスワードレス：メールに認証コード送信）"""
+    """ログイン画面（Firebase 認証: メールリンク / Google）"""
 
     def get(self, request):
         if request.user.is_authenticated and request.user.is_verified:
             return redirect('home')
-        form = LoginForm()
-        return render(request, 'accounts/login.html', {'form': form})
-
-    def post(self, request):
-        form = LoginForm(request.POST)
-        if form.is_valid():
-            email = form.cleaned_data['email']
-            try:
-                user = User.objects.get(email=email, is_deleted=False, is_verified=True)
-            except User.DoesNotExist:
-                messages.error(request, 'このメールアドレスは登録されていません。')
-                return render(request, 'accounts/login.html', {'form': form})
-
-            # 認証コード送信してverify画面へ
-            request.session['pending_user_id'] = user.pk
-            request.session['auth_flow'] = 'login'
-            self._send_code(user)
-            messages.info(request, '認証コードをメールに送信しました。')
-            return redirect('accounts:verify')
-        return render(request, 'accounts/login.html', {'form': form})
-
-    def _send_code(self, user):
-        verification = EmailVerification(user=user)
-        verification.save()
-        send_verification_email(user, verification.code)
+        return render(request, 'accounts/login.html', {
+            'firebase_api_key': settings.FIREBASE_API_KEY,
+            'firebase_auth_domain': settings.FIREBASE_AUTH_DOMAIN,
+            'firebase_project_id': settings.FIREBASE_PROJECT_ID,
+        })
 
 
 class RegisterView(View):
-    """新規登録画面（パスワードなし）"""
+    """
+    新規登録画面 — Firebase 認証後、ユーザ名を設定する。
+    Firebase 認証 → callback でセッションに仮情報保存 → ここでユーザ名入力。
+    """
 
     def get(self, request):
         if request.user.is_authenticated:
             return redirect('home')
-        form = RegisterForm()
-        return render(request, 'accounts/register.html', {'form': form})
+
+        # Firebase 認証済みか確認
+        firebase_email = request.session.get('firebase_email')
+        if not firebase_email:
+            # 未認証 → ログインページへ
+            return redirect('accounts:login')
+
+        form = RegisterForm(initial={'email': firebase_email})
+        return render(request, 'accounts/register.html', {
+            'form': form,
+            'firebase_email': firebase_email,
+        })
 
     def post(self, request):
+        firebase_uid = request.session.get('firebase_uid')
+        firebase_email = request.session.get('firebase_email')
+        if not firebase_uid or not firebase_email:
+            messages.error(request, 'Firebase認証が必要です。')
+            return redirect('accounts:login')
+
         form = RegisterForm(request.POST)
+        # email を Firebase から取得した値に固定
+        form.data = form.data.copy()
+        form.data['email'] = firebase_email
+
         if form.is_valid():
-            user = form.save()
-            verification = EmailVerification(user=user)
-            verification.save()
-            send_verification_email(user, verification.code)
+            user = form.save(commit=False)
+            user.firebase_uid = firebase_uid
+            user.is_verified = True
+            user.set_unusable_password()
+            user.save()
 
-            request.session['pending_user_id'] = user.pk
-            request.session['auth_flow'] = 'register'
-            messages.success(request, '登録が完了しました。認証コードを入力してください。')
-            return redirect('accounts:verify')
-        return render(request, 'accounts/register.html', {'form': form})
+            # セッションクリア
+            request.session.pop('firebase_uid', None)
+            request.session.pop('firebase_email', None)
+            request.session.pop('firebase_name', None)
+
+            login(request, user, backend='accounts.backends.FirebaseAuthBackend')
+            request.session.set_expiry(2592000)  # 30日間
+            messages.success(request, '登録が完了しました。ようこそ SIRISA へ！')
+            return redirect('home')
+
+        return render(request, 'accounts/register.html', {
+            'form': form,
+            'firebase_email': firebase_email,
+        })
 
 
-class VerifyEmailView(View):
-    """メール認証画面"""
+@method_decorator(csrf_exempt, name='dispatch')
+class FirebaseCallbackView(View):
+    """
+    Firebase ID トークンを受け取り Django セッションにログインする。
+
+    POST /accounts/firebase/callback/
+    Body: { "idToken": "..." }
+    Response: { "status": "ok", "redirect": "/", "action": "login" }
+              { "status": "ok", "redirect": "/accounts/register/", "action": "register" }
+              { "status": "error", "message": "..." }
+    """
+
+    def post(self, request):
+        try:
+            body = json.loads(request.body)
+        except (json.JSONDecodeError, ValueError):
+            return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+
+        id_token = body.get('idToken')
+        if not id_token:
+            return JsonResponse({'status': 'error', 'message': 'idToken is required'}, status=400)
+
+        # Firebase ID トークン検証
+        decoded = verify_id_token(id_token)
+        if decoded is None:
+            return JsonResponse({'status': 'error', 'message': '認証に失敗しました。'}, status=401)
+
+        uid = decoded.get('uid')
+        email = decoded.get('email')
+        name = decoded.get('name', '')
+
+        if not email:
+            return JsonResponse({'status': 'error', 'message': 'メールアドレスが取得できませんでした。'}, status=400)
+
+        # Django 認証バックエンドで認証
+        user = authenticate(request, firebase_id_token=id_token)
+
+        if user is not None:
+            # 既存ユーザ → ログイン
+            login(request, user, backend='accounts.backends.FirebaseAuthBackend')
+            request.session.set_expiry(2592000)  # 30日間
+            logger.info('Firebase login: %s (uid=%s)', email, uid)
+            return JsonResponse({
+                'status': 'ok',
+                'redirect': '/',
+                'action': 'login',
+            })
+        else:
+            # 新規ユーザ → セッションに Firebase 情報を保存し登録画面へ
+            request.session['firebase_uid'] = uid
+            request.session['firebase_email'] = email
+            request.session['firebase_name'] = name
+            logger.info('Firebase new user: %s (uid=%s) → register', email, uid)
+            return JsonResponse({
+                'status': 'ok',
+                'redirect': '/accounts/register/',
+                'action': 'register',
+            })
+
+
+# ── メールリンク認証ヘルパー ──────────────────────────────────
+
+
+class EmailLinkCallbackView(View):
+    """
+    メールリンクのコールバックページ。
+    Firebase Web SDK がリンクを検証し、ID トークンを取得して
+    FirebaseCallbackView に POST する。
+    """
 
     def get(self, request):
-        user_id = request.session.get('pending_user_id')
-        if not user_id:
-            return redirect('accounts:login')
-        form = VerifyForm()
-        return render(request, 'accounts/verify.html', {'form': form})
-
-    def post(self, request):
-        user_id = request.session.get('pending_user_id')
-        if not user_id:
-            return redirect('accounts:login')
-
-        form = VerifyForm(request.POST)
-        if form.is_valid():
-            code = form.cleaned_data['code']
-            try:
-                user = User.objects.get(pk=user_id)
-                verification = EmailVerification.objects.filter(
-                    user=user,
-                    code=code,
-                    is_used=False,
-                ).order_by('-created_at').first()
-
-                if verification and verification.is_valid:
-                    verification.is_used = True
-                    verification.save(update_fields=['is_used'])
-                    user.is_verified = True
-                    user.save(update_fields=['is_verified'])
-
-                    login(request, user)
-                    request.session.set_expiry(2592000)  # 30日間
-                    self._cleanup_session(request)
-
-                    messages.success(request, '認証が完了しました。ようこそ SIRISA へ！')
-                    return redirect('home')
-                else:
-                    messages.error(request, '認証コードが無効または期限切れです。')
-            except User.DoesNotExist:
-                messages.error(request, 'ユーザが見つかりませんでした。')
-
-        return render(request, 'accounts/verify.html', {'form': form})
-
-    def _cleanup_session(self, request):
-        for key in ('pending_user_id', 'auth_flow', 'email_change_to'):
-            request.session.pop(key, None)
+        return render(request, 'accounts/email_link_callback.html', {
+            'firebase_api_key': settings.FIREBASE_API_KEY,
+            'firebase_auth_domain': settings.FIREBASE_AUTH_DOMAIN,
+            'firebase_project_id': settings.FIREBASE_PROJECT_ID,
+        })
 
 
-class ResendCodeView(View):
-    """認証コード再送信"""
-
-    def post(self, request):
-        user_id = request.session.get('pending_user_id')
-        if not user_id:
-            return redirect('accounts:login')
-
-        try:
-            user = User.objects.get(pk=user_id)
-            recent = EmailVerification.objects.filter(
-                user=user,
-                created_at__gte=timezone.now() - timedelta(seconds=60),
-            ).exists()
-
-            if recent:
-                messages.warning(request, '再送信は60秒間隔でお願いします。')
-            else:
-                verification = EmailVerification(user=user)
-                verification.save()
-                send_verification_email(user, verification.code)
-                messages.success(request, '認証コードを再送信しました。')
-        except User.DoesNotExist:
-            messages.error(request, 'ユーザが見つかりませんでした。')
-
-        return redirect('accounts:verify')
+# ── 既存ビュー（変更なし）──────────────────────────────────
 
 
 class LogoutView(View):
@@ -199,72 +222,25 @@ class ProfileView(LoginRequiredMixin, View):
 
 
 class EmailChangeView(LoginRequiredMixin, View):
-    """メールアドレス変更（認証コード送信後に変更）"""
+    """
+    メールアドレス変更。
+    Firebase 側のメールも変更が必要なため、
+    利用者には Firebase の再認証を案内する。
+    """
     login_url = '/accounts/login/'
 
     def post(self, request):
         form = EmailChangeForm(request.POST, user=request.user)
         if form.is_valid():
             new_email = form.cleaned_data['new_email']
-            # セッションに保存して認証コードを送信
-            request.session['email_change_to'] = new_email
-            request.session['pending_user_id'] = request.user.pk
-            request.session['auth_flow'] = 'email_change'
-            verification = EmailVerification(user=request.user)
-            verification.save()
-            # 現在のメールに認証コード送信
-            send_verification_email(request.user, verification.code)
-            messages.info(request, '現在のメールアドレスに認証コードを送信しました。')
-            return redirect('accounts:verify_email_change')
+            request.user.email = new_email
+            request.user.save(update_fields=['email'])
+            messages.success(request, 'メールアドレスを変更しました。Firebase 側のメールアドレスも更新してください。')
+            return redirect('accounts:profile')
         profile_form = ProfileForm(instance=request.user)
         return render(request, 'accounts/profile.html', {
             'form': profile_form,
             'email_form': form,
-        })
-
-
-class VerifyEmailChangeView(LoginRequiredMixin, View):
-    """メールアドレス変更の認証"""
-    login_url = '/accounts/login/'
-
-    def get(self, request):
-        if 'email_change_to' not in request.session:
-            return redirect('accounts:profile')
-        form = VerifyForm()
-        return render(request, 'accounts/verify.html', {
-            'form': form,
-            'is_email_change': True,
-        })
-
-    def post(self, request):
-        if 'email_change_to' not in request.session:
-            return redirect('accounts:profile')
-
-        form = VerifyForm(request.POST)
-        if form.is_valid():
-            code = form.cleaned_data['code']
-            verification = EmailVerification.objects.filter(
-                user=request.user,
-                code=code,
-                is_used=False,
-            ).order_by('-created_at').first()
-
-            if verification and verification.is_valid:
-                verification.is_used = True
-                verification.save(update_fields=['is_used'])
-                new_email = request.session.pop('email_change_to')
-                request.session.pop('pending_user_id', None)
-                request.session.pop('auth_flow', None)
-                request.user.email = new_email
-                request.user.save(update_fields=['email'])
-                messages.success(request, 'メールアドレスを変更しました。')
-                return redirect('accounts:profile')
-            else:
-                messages.error(request, '認証コードが無効または期限切れです。')
-
-        return render(request, 'accounts/verify.html', {
-            'form': form,
-            'is_email_change': True,
         })
 
 

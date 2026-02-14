@@ -70,6 +70,9 @@ def generate_ai_answer(self, question_id, user_id=None):
             pass
 
     # 2種類の回答を生成: normal と slide
+    # ★ 先に両方のpendingレコードを作成してから生成する
+    #   （ページ表示時に両方のローディング表示が出るようにするため）
+    answers = {}
     for style in ('normal', 'slide'):
         answer, created = Answer.objects.get_or_create(
             question=question,
@@ -83,11 +86,13 @@ def generate_ai_answer(self, question_id, user_id=None):
                 'ai_generation_status': 'pending',
             }
         )
-
         if not created and answer.ai_generation_status == 'completed':
             logger.info(f'AI回答({style})は既に生成済み: question_id={question_id}')
             continue
+        answers[style] = answer
 
+    # 各回答の生成
+    for style, answer in answers.items():
         try:
             # 使用回数制限チェック
             if requesting_user and not AIUsageLog.can_use(requesting_user):

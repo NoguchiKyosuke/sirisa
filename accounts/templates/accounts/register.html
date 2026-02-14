@@ -5,18 +5,23 @@
 <div class="row justify-content-center">
     <div class="col-md-6 col-lg-5">
         <div class="card p-4 mt-5">
-            <h2 class="text-center mb-4">新規登録</h2>
+            <h2 class="text-center mb-4">ユーザ名を設定</h2>
+            <p class="text-muted text-center mb-3">
+                <i class="bi bi-envelope-check"></i>
+                {{ firebase_email }} で認証済みです
+            </p>
             <form method="post">
                 {% csrf_token %}
-                {% for field in form %}
                 <div class="mb-3">
-                    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
-                    {{ field }}
-                    {% for error in field.errors %}
+                    <label for="id_username" class="form-label">ユーザ名</label>
+                    <input type="text" name="username" id="id_username" class="form-control"
+                           placeholder="ユーザ名" value="{{ form.username.value|default:'' }}" autofocus required>
+                    {% for error in form.username.errors %}
                     <div class="text-danger small mt-1">{{ error }}</div>
                     {% endfor %}
                 </div>
-                {% endfor %}
+                <!-- email は hidden（Firebase から取得済み） -->
+                <input type="hidden" name="email" value="{{ firebase_email }}">
                 {% if form.non_field_errors %}
                 <div class="alert alert-danger">
                     {% for error in form.non_field_errors %}
@@ -24,14 +29,16 @@
                     {% endfor %}
                 </div>
                 {% endif %}
-                <p class="text-muted small text-center"><i class="bi bi-shield-check"></i> パスワードは不要です。メール認証のみで利用できます。</p>
+                <p class="text-muted small text-center">
+                    <i class="bi bi-shield-check"></i> パスワードは不要です。Firebase 認証で安全にログインできます。
+                </p>
                 <button type="submit" class="btn btn-sirisa w-100 mb-3">
-                    <i class="bi bi-person-plus"></i> 新規登録
+                    <i class="bi bi-person-plus"></i> 登録を完了する
                 </button>
             </form>
             <div class="text-center">
                 <a href="{% url 'accounts:login' %}" class="text-decoration-none">
-                    既にアカウントをお持ちの方はこちら
+                    別のアカウントでサインインする
                 </a>
             </div>
         </div>

@@ -347,6 +347,30 @@ function renderChartJSInShadow(container, answerId) {
     }
 }
 
+// ===== Shadow DOM内のonclick属性変換 =====
+// スクリプトが全て読み込まれた後に呼び出すこと（関数が定義済みであることを保証）
+function convertOnclickHandlers(container) {
+    container.querySelectorAll('[onclick]').forEach(function(el) {
+        var code = el.getAttribute('onclick');
+        el.removeAttribute('onclick');
+        el.addEventListener('click', function(e) {
+            try {
+                // onclick内のevent/this参照をサポートするため
+                // Function constructorで event 引数を受け取る関数を作成し
+                // グローバルスコープの関数にアクセスできるよう window 経由で呼び出す
+                // 例: changeTab(event) → event引数を受け取って実行
+                // 例: nextSlide_xxx() → window上の関数を呼び出す
+                //
+                // with(window) によりグローバル変数・関数を直接参照可能にする
+                var fn = new Function('event', 'with(window){' + code + '}');
+                fn.call(el, e);
+            } catch (err) {
+                console.warn('Shadow DOM onclick error:', err);
+            }
+        });
+    });
+}
+
 // ===== Shadow DOM 初期化 =====
 function initShadowDOM() {
     document.querySelectorAll('.ai-shadow-host:not([data-shadow-init])').forEach(function(host) {
@@ -400,6 +424,12 @@ function initShadowDOM() {
                 if (hasCanvasElements) {
                     renderChartJSInShadow(container, answerId);
                 }
+
+                // Shadow DOM内のonclick属性をaddEventListenerに変換
+                // ★ スクリプトが全て読み込まれた後に実行することで
+                //   関数が定義済みであることを保証する
+                convertOnclickHandlers(container);
+
                 return;
             }
             var oldScript = scripts[idx];
@@ -443,23 +473,6 @@ function initShadowDOM() {
         };
         loadNext(0);
 
-        // Shadow DOM内のonclick属性をaddEventListenerに変換
-        // Shadow DOM内のonclickはグローバルスコープにアクセスできないため
-        // 間接eval (0, eval)(code) でグローバルスコープで実行する
-        container.querySelectorAll('[onclick]').forEach(function(el) {
-            var code = el.getAttribute('onclick');
-            el.removeAttribute('onclick');
-            el.addEventListener('click', function(e) {
-                try {
-                    // 間接evalはグローバルスコープで実行されるため
-                    // document.headに移動したスクリプトで定義された関数にアクセスできる
-                    (0, eval)(code);
-                } catch (err) {
-                    console.warn('Shadow DOM onclick error:', err);
-                }
-            });
-        });
-
         // KaTeX レンダリング（Shadow DOM内）
         // auto-render.min.js が未ロードの場合はリトライする
         (function renderShadowKaTeX(el, retries) {
@@ -489,6 +502,10 @@ function initShadowDOM() {
         container.addEventListener('click', function(e) {
             const katexEl = e.target.closest('.katex');
             if (katexEl) {
+                // 数式クリック時は親要素のonclickイベント（展開/折りたたみ等）を
+                // 発火させないようにイベント伝播を停止する
+                e.stopPropagation();
+                e.preventDefault();
                 handleFormulaClick(katexEl, answerId, container);
             }
         });
@@ -595,17 +612,18 @@ function handleContextMenu(e, shadow, answerId) {
     }
 }
 
-// ドキュメントレベルの右クリック（ユーザ回答エリア）
+// ドキュメントレベルの右クリック（ユーザ回答・返信エリア）
 document.addEventListener('contextmenu', function(e) {
     var contextMenu = document.getElementById('customContextMenu');
-    // 回答エリア内かどうかチェック
+    // 回答エリアまたは返信エリア内かどうかチェック
     var answerBody = e.target.closest ? e.target.closest('.answer-body') : null;
-    if (!answerBody) {
+    var replyArea = e.target.closest ? e.target.closest('.reply-body-area') : null;
+    if (!answerBody && !replyArea) {
         contextMenu.style.display = 'none';
         return;  // ブラウザデフォルトを許可
     }
     // Shadow DOMホストの場合はShadow DOM側のハンドラで処理
-    if (answerBody.classList.contains('ai-shadow-host')) {
+    if (answerBody && answerBody.classList.contains('ai-shadow-host')) {
         return;
     }
 
@@ -617,11 +635,20 @@ document.addEventListener('contextmenu', function(e) {
     }
 
     e.preventDefault();
-    var answerId = answerBody.dataset.answerId || '';
+    var answerId = '';
+    var contextEl = null;
+    if (replyArea) {
+        var replyItemEl = replyArea.closest('.reply-item');
+        answerId = replyItemEl ? replyItemEl.dataset.answerId || '' : '';
+        contextEl = replyArea;
+    } else if (answerBody) {
+        answerId = answerBody.dataset.answerId || '';
+        contextEl = answerBody;
+    }
     selectedAnnotationData = {
         answerId: answerId,
         selectedText: text,
-        contextBefore: answerBody.innerText || '',
+        contextBefore: contextEl ? contextEl.innerText || '' : '',
         contextAfter: '',
     };
 
@@ -646,7 +673,7 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ===== 通常のテキスト選択（ユーザ回答用） =====
+// ===== 通常のテキスト選択（ユーザ回答 + 返信用） =====
 document.addEventListener('mouseup', function(e) {
     const aiBtn = document.getElementById('aiAskBtn');
     const sel = window.getSelection();
@@ -661,15 +688,35 @@ document.addEventListener('mouseup', function(e) {
 
     const anchorNode = sel.anchorNode;
     if (!anchorNode) { aiBtn.style.display = 'none'; return; }
+
+    // 返信エリア内の選択を検出
+    const replyItem = anchorNode.nodeType === 3
+        ? anchorNode.parentElement?.closest('.reply-body-area')
+        : anchorNode.closest?.('.reply-body-area');
+
     const answerBody = anchorNode.nodeType === 3
         ? anchorNode.parentElement?.closest('.answer-body')
         : anchorNode.closest?.('.answer-body');
+
     // Shadow DOMホスト内の選択はShadow DOM側のハンドラで処理するためスキップ
-    if (!answerBody || answerBody.classList.contains('ai-shadow-host')) {
+    if (answerBody && answerBody.classList.contains('ai-shadow-host')) {
         return;
     }
 
-    const answerId = answerBody.dataset.answerId;
+    let answerId = null;
+    let contextEl = null;
+
+    if (replyItem) {
+        // 返信エリア内のテキスト選択
+        const replyItemEl = replyItem.closest('.reply-item');
+        answerId = replyItemEl ? replyItemEl.dataset.answerId : null;
+        contextEl = replyItem;
+    } else if (answerBody) {
+        // 回答エリア内のテキスト選択
+        answerId = answerBody.dataset.answerId;
+        contextEl = answerBody;
+    }
+
     if (!answerId) {
         aiBtn.style.display = 'none';
         return;
@@ -684,7 +731,7 @@ document.addEventListener('mouseup', function(e) {
     selectedAnnotationData = {
         answerId: answerId,
         selectedText: text,
-        contextBefore: answerBody.innerText || '',
+        contextBefore: contextEl.innerText || '',
         contextAfter: '',
     };
 });
@@ -815,11 +862,29 @@ function highlightSelection(annotationData, explanation, annotationId) {
     }
 }
 
-// 数式クリック処理（Shadow DOM外のユーザ回答用）
+// 数式クリック処理（Shadow DOM外のユーザ回答・返信用）
 document.addEventListener('click', function(e) {
     const katexEl = e.target.closest('.katex');
     if (!katexEl) return;
 
+    // 数式クリック時は親要素のonclickイベント（展開/折りたたみ等）を
+    // 発火させないようにイベント伝播を停止する
+    e.stopPropagation();
+    e.preventDefault();
+
+    // 返信エリア内の数式クリック
+    const replyArea = katexEl.closest('.reply-body-area');
+    if (replyArea) {
+        const replyItemEl = replyArea.closest('.reply-item');
+        const answerId = replyItemEl ? replyItemEl.dataset.answerId : null;
+        if (answerId) {
+            e.stopPropagation();
+            handleFormulaClick(katexEl, answerId, replyArea);
+        }
+        return;
+    }
+
+    // 回答エリア内の数式クリック
     const answerBody = katexEl.closest('.answer-body');
     if (!answerBody || answerBody.classList.contains('ai-shadow-host')) return;
 

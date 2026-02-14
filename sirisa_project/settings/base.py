@@ -94,6 +94,12 @@ AUTH_PASSWORD_VALIDATORS = [
 # カスタムユーザモデル
 AUTH_USER_MODEL = 'accounts.User'
 
+# 認証バックエンド（Firebase 優先）
+AUTHENTICATION_BACKENDS = [
+    'accounts.backends.FirebaseAuthBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 # 認証リダイレクト
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
@@ -201,3 +207,8 @@ LOGGING = {
         },
     },
 }
+
+# Firebase 設定
+FIREBASE_PROJECT_ID = os.getenv('FIREBASE_PROJECT_ID', 'sirisa')
+FIREBASE_API_KEY = os.getenv('FIREBASE_API_KEY', '')
+FIREBASE_AUTH_DOMAIN = os.getenv('FIREBASE_AUTH_DOMAIN', f'{FIREBASE_PROJECT_ID}.firebaseapp.com')
