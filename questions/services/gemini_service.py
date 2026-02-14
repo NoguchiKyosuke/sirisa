@@ -75,6 +75,24 @@ def strip_code_fences(text):
     return text.strip()
 
 
+def strip_html_document_wrapper(text):
+    """
+    Geminiが返す <!DOCTYPE html><html><head>...<body>...</body></html> を
+    <body> 内のコンテンツだけに変換する
+    """
+    # <body>...</body> 内のコンテンツを抽出
+    body_match = re.search(r'<body[^>]*>(.*?)</body>', text, re.DOTALL | re.IGNORECASE)
+    if body_match:
+        text = body_match.group(1).strip()
+    else:
+        # <body>タグがなくても <!DOCTYPE>, <html>, <head> を除去
+        text = re.sub(r'<!DOCTYPE[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'</?html[^>]*>', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'<head[^>]*>.*?</head>', '', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'</?body[^>]*>', '', text, flags=re.IGNORECASE)
+    return text.strip()
+
+
 def strip_style_blocks(text):
     """
     <style>...</style> ブロックを除去する
@@ -231,6 +249,7 @@ def generate_reply_text(question_title, question_body, answer_body,
 
 【出力ルール】
 - 回答はHTML形式で出力してください。マークダウンのコードフェンス（```html...```）は使わないでください。
+- <!DOCTYPE html>、<html>、<head>、<body>タグは絶対に含めないでください。本文のHTMLだけを出力してください。
 - 数式がある場合はKaTeX記法（$...$）を使ってください。
 - 回答は日本語で行ってください。
 - 返信なので簡潔に要点をまとめてください。
@@ -246,7 +265,9 @@ def generate_reply_text(question_title, question_body, answer_body,
     )
 
     if response.text:
-        return strip_code_fences(response.text)
+        text = strip_code_fences(response.text)
+        text = strip_html_document_wrapper(text)
+        return text
     raise ValueError('AI返信で空のレスポンスが返されました。')
 
 
@@ -299,7 +320,9 @@ def generate_annotation(selected_text, context_before, context_after,
     )
 
     if response.text:
-        return strip_code_fences(response.text)
+        text = strip_code_fences(response.text)
+        text = strip_html_document_wrapper(text)
+        return text
     raise ValueError('AI注釈で空のレスポンスが返されました。')
 
 

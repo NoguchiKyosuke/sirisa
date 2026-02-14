@@ -365,55 +365,6 @@ function initShadowDOM() {
         katexCSS.href = 'https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css';
         shadow.appendChild(katexCSS);
 
-        // ダークモード対応CSS をShadow DOM内に注入
-        const darkModeStyle = document.createElement('style');
-        darkModeStyle.textContent = `
-            :host-context([data-bs-theme="dark"]) .shadow-content {
-                color: #e0e0e0;
-                background-color: transparent;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content h1,
-            :host-context([data-bs-theme="dark"]) .shadow-content h2,
-            :host-context([data-bs-theme="dark"]) .shadow-content h3,
-            :host-context([data-bs-theme="dark"]) .shadow-content h4,
-            :host-context([data-bs-theme="dark"]) .shadow-content h5,
-            :host-context([data-bs-theme="dark"]) .shadow-content h6 {
-                color: #f0f0f0;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content a {
-                color: #5dade2;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content table,
-            :host-context([data-bs-theme="dark"]) .shadow-content th,
-            :host-context([data-bs-theme="dark"]) .shadow-content td {
-                border-color: #444;
-                color: #e0e0e0;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content pre,
-            :host-context([data-bs-theme="dark"]) .shadow-content code {
-                background-color: #1a1a2e;
-                color: #e0e0e0;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content blockquote {
-                border-left-color: #5dade2;
-                color: #ccc;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content .slide {
-                background-color: #16213e;
-                color: #e0e0e0;
-            }
-            :host-context([data-bs-theme="dark"]) .shadow-content svg text {
-                fill: #e0e0e0;
-            }
-            /* Fallback for browsers not supporting :host-context */
-            @media (prefers-color-scheme: dark) {
-                .shadow-content {
-                    color: #e0e0e0;
-                }
-            }
-        `;
-        shadow.appendChild(darkModeStyle);
-
         // コンテンツコンテナ作成
         const container = document.createElement('div');
         container.className = 'shadow-content';
@@ -494,13 +445,15 @@ function initShadowDOM() {
 
         // Shadow DOM内のonclick属性をaddEventListenerに変換
         // Shadow DOM内のonclickはグローバルスコープにアクセスできないため
+        // 間接eval (0, eval)(code) でグローバルスコープで実行する
         container.querySelectorAll('[onclick]').forEach(function(el) {
             var code = el.getAttribute('onclick');
             el.removeAttribute('onclick');
             el.addEventListener('click', function(e) {
                 try {
-                    var fn = new Function(code);
-                    fn.call(el);
+                    // 間接evalはグローバルスコープで実行されるため
+                    // document.headに移動したスクリプトで定義された関数にアクセスできる
+                    (0, eval)(code);
                 } catch (err) {
                     console.warn('Shadow DOM onclick error:', err);
                 }
