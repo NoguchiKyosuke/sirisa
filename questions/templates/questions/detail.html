@@ -473,7 +473,8 @@ function initShadowDOM() {
                 // （Shadow DOM内では renderMermaidInShadow() で別途処理するため）
                 // 複数行にまたがる呼び出しも除去
                 code = code.replace(/mermaid\.initialize\s*\(\s*\{[^}]*(?:\{[^}]*\}[^}]*)*\}\s*\)\s*;?/g, '/* mermaid.initialize removed */');
-                code = code.replace(/mermaid\.run\s*\([^)]*\)\s*;?/g, '/* mermaid.run removed */');
+                // ネストされた括弧に対応（例: mermaid.run({ nodes: querySelectorAll(...) }) ）
+                code = code.replace(/mermaid\.run\s*\((?:[^()]*|\([^()]*\))*\)\s*;?/g, '/* mermaid.run removed */');
 
                 // IIFE内のfunction宣言をwindowにエクスポート
                 // (onclick属性からの呼び出しに必要 — Shadow DOM内ではグローバル関数参照不可のため)

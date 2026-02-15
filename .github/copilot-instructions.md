@@ -65,7 +65,7 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - 返信エリア内の数式クリックでも導出過程のAI説明ポップアップが表示される
 - 数式クリックハンドラでは `e.stopPropagation()` + `e.preventDefault()` で親要素の onclick（折りたたみ等）が発火しないようにする
 - AI回答のプロンプトで「KaTeX数式をonclick属性を持つトリガー要素の内部に配置しない」ルールを追加済み
-- Mermaid.jsはShadow DOM内で`mermaid.render()` APIを使って個別レンダリング（startOnLoad不可）。Mermaid CDN外部スクリプトのみスキップ。インラインスクリプト内の`mermaid.initialize()`/`mermaid.run()`呼び出しは正規表現で除去（スクリプト全体をスキップしない — 他の関数定義を破壊するため）。
+- Mermaid.jsはShadow DOM内で`mermaid.render()` APIを使って個別レンダリング（startOnLoad不可）。Mermaid CDN外部スクリプトのみスキップ。インラインスクリプト内の`mermaid.initialize()`/`mermaid.run()`呼び出しは正規表現で除去（スクリプト全体をスキップしない — 他の関数定義を破壊するため）。`mermaid.run()`の除去正規表現はネストされた括弧に対応（例: `mermaid.run({ nodes: querySelectorAll(...) })`）。
 - Mermaid.jsのノードラベル内および`subgraph`ラベル内の丸括弧 `()` と中括弧 `{}` は `sanitizeMermaidCode()` で引用符エスケープ
 - KaTeX `renderMathInElement()` 呼び出しには全箇所 `strict: false` を設定（日本語Unicode文字の警告を抑制）
 - AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
