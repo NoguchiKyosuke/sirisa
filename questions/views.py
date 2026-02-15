@@ -271,6 +271,12 @@ class QuestionListView(LoginRequiredMixin, View):
         username = request.GET.get('username', '').strip()
         unresolved = request.GET.get('unresolved')
 
+        # URLパラメータが文字列 'None' の場合は無視する
+        if subject_id in ('', 'None'):
+            subject_id = None
+        if unresolved in ('', 'None'):
+            unresolved = None
+
         if subject_id:
             questions = questions.filter(subject_id=subject_id)
         if username:
@@ -421,18 +427,6 @@ class AnswerCreateView(LoginRequiredMixin, View):
             answer.question = question
             answer.user = request.user
             answer.save()
-
-            # メディアファイル保存
-            files = request.FILES.getlist('files')
-            total_size = sum(f.size for f in files)
-            if total_size > MAX_TOTAL_MEDIA_SIZE:
-                messages.warning(request, 'ファイルの合計サイズが100MBを超えています。')
-            else:
-                for f in files:
-                    AnswerMedia.objects.create(
-                        answer=answer, file=f,
-                        file_size=f.size, original_name=f.name,
-                    )
 
             # 下書きを削除
             AnswerDraft.objects.filter(
