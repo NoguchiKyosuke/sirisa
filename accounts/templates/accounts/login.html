@@ -46,9 +46,9 @@
                 <button id="btn-email" class="btn btn-sirisa w-100 mb-3" onclick="signInWithEmail()">
                     <i class="bi bi-box-arrow-in-right"></i> メールでサインイン
                 </button>
-                <p class="text-muted small text-center mb-0">
-                    アカウントをお持ちでない方は<a href="#" onclick="signUpWithEmail(); return false;">新規登録</a>
-                </p>
+                <button id="btn-register" class="btn btn-outline-primary w-100 mb-3" onclick="signUpWithEmail()">
+                    <i class="bi bi-person-plus"></i> 新規登録
+                </button>
             </div>
         </div>
     </div>
@@ -83,12 +83,16 @@
         document.getElementById('btn-google').disabled = true;
         var btnEmail = document.getElementById('btn-email');
         if (btnEmail) btnEmail.disabled = true;
+        var btnReg = document.getElementById('btn-register');
+        if (btnReg) btnReg.disabled = true;
     }
     function hideLoading() {
         document.getElementById('auth-loading').classList.add('d-none');
         document.getElementById('btn-google').disabled = false;
         var btnEmail = document.getElementById('btn-email');
         if (btnEmail) btnEmail.disabled = false;
+        var btnReg = document.getElementById('btn-register');
+        if (btnReg) btnReg.disabled = false;
     }
 
     // Firebase ID トークンをサーバに送信
