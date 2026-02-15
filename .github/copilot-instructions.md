@@ -11,7 +11,7 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - **AI**: Gemini 2.5 Pro (初回回答) + Gemini 2.5 Flash (返信・注釈) / Vertex AI SDK
 - **AI制限**: 1アカウント1日100回（`AIUsageLog` モデル）
 - **Frontend**: Django Templates + htmx 2.0 + Bootstrap 5.3 + KaTeX
-- **認証**: Firebase Authentication（メールリンク + Google サインイン） + Firebase Admin SDK
+- **認証**: Firebase Authentication（メール/パスワード + Google サインイン） + Firebase Admin SDK
 - **Server**: Nginx + Gunicorn (systemd)
 
 ## ディレクトリ構成
@@ -71,7 +71,7 @@ Django 4.2 LTS + PostgreSQL + Celery + Redis で構築されています。
 - AI回答には必ずCSSアニメーション + JSインタラクション + 図/グラフ/ダイアグラムを含める（プロンプトで強制）
 - 図表はSVG、Chart.js、Mermaid.js、CSSのみの4方式を教科に応じて使い分け
 - AI回答は質問ごとに2種類生成: 「通常」+ 「スライド」（`answer_style` フィールドで区別）。`generate_ai_answer` タスクは両方の pending レコードを先に作成してから生成を開始（ローディングカードが即座に表示されるように）
-- **Firebase 認証フロー**: ログインページで Firebase Web SDK（v10 compat）を使い、`signInWithRedirect`（Google）or メールリンク認証 → Firebase ID トークンを `FirebaseCallbackView` に POST → Django セッション作成。新規ユーザは `RegisterView` でユーザ名のみ入力。リダイレクト後は `getRedirectResult()` で結果を処理。
+- **Firebase 認証フロー**: ログインページで Firebase Web SDK（v10 compat）を使い、`signInWithRedirect`（Google）or `signInWithEmailAndPassword` / `createUserWithEmailAndPassword`（メール/パスワード） → Firebase ID トークンを `FirebaseCallbackView` に POST → Django セッション作成。新規ユーザは `RegisterView` でユーザ名のみ入力。Google リダイレクト後は `getRedirectResult()` で結果を処理。
 - **Firebase 設定**: `FIREBASE_PROJECT_ID`, `FIREBASE_API_KEY`, `FIREBASE_AUTH_DOMAIN` を `.env` で管理。`FIREBASE_AUTH_DOMAIN` は自ドメイン（`sirisa.net`）に設定し、Tracking Prevention によるサードパーティストレージブロックを回避。サーバ側は GCE デフォルト認証情報 + Firebase Admin SDK。
 - **Firebase nginx プロキシ**: `/__/auth/` と `/__/firebase/` を `sirisa-f5a1f.firebaseapp.com` にリバースプロキシ。`authDomain` を自ドメインにする際に必要（`signInWithRedirect` が `/__/auth/handler` と `/__/firebase/init.json` を参照するため）。
 - `User` モデルに `firebase_uid` フィールド（Firebase UID と紐付け）。`FirebaseCallbackView` と `RegisterView` で論理削除済みユーザの `firebase_uid` を自動クリア（IntegrityError 防止）。

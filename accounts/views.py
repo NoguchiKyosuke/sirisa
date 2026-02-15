@@ -28,7 +28,7 @@ User = get_user_model()
 
 
 class LoginView(View):
-    """ログイン画面（Firebase 認証: メールリンク / Google）"""
+    """ログイン画面（Firebase 認証: メール/パスワード / Google）"""
 
     def get(self, request):
         if request.user.is_authenticated and request.user.is_verified:
@@ -186,25 +186,7 @@ class FirebaseCallbackView(View):
             })
 
 
-# ── メールリンク認証ヘルパー ──────────────────────────────────
-
-
-class EmailLinkCallbackView(View):
-    """
-    メールリンクのコールバックページ。
-    Firebase Web SDK がリンクを検証し、ID トークンを取得して
-    FirebaseCallbackView に POST する。
-    """
-
-    def get(self, request):
-        return render(request, 'accounts/email_link_callback.html', {
-            'firebase_api_key': settings.FIREBASE_API_KEY,
-            'firebase_auth_domain': settings.FIREBASE_AUTH_DOMAIN,
-            'firebase_project_id': settings.FIREBASE_PROJECT_ID,
-        })
-
-
-# ── 既存ビュー（変更なし）──────────────────────────────────
+# ── 既存ビュー ──────────────────────────────────
 
 
 class LogoutView(View):

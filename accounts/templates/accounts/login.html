@@ -33,28 +33,22 @@
                 <span class="text-muted small">または</span>
             </div>
 
-            <!-- メールリンク認証 -->
+            <!-- メール + パスワード認証 -->
             <div id="email-form">
                 <div class="mb-3">
                     <label for="email-input" class="form-label">メールアドレス</label>
                     <input type="email" id="email-input" class="form-control" placeholder="email@example.com" autofocus>
                 </div>
-                <p class="text-muted small text-center">
-                    <i class="bi bi-envelope"></i> サインインリンクをメールに送信します
-                </p>
-                <button id="btn-email" class="btn btn-sirisa w-100 mb-3" onclick="sendEmailLink()">
-                    <i class="bi bi-send"></i> メールリンクを送信
-                </button>
-            </div>
-
-            <!-- メール送信完了メッセージ -->
-            <div id="email-sent" class="d-none">
-                <div class="alert alert-success">
-                    <i class="bi bi-check-circle"></i>
-                    サインインリンクを <strong id="sent-to-email"></strong> に送信しました。<br>
-                    メール内のリンクをクリックしてログインしてください。
+                <div class="mb-3">
+                    <label for="password-input" class="form-label">パスワード</label>
+                    <input type="password" id="password-input" class="form-control" placeholder="パスワード">
                 </div>
-                <p class="text-muted small text-center">メールが届かない場合は迷惑メールフォルダをご確認ください。</p>
+                <button id="btn-email" class="btn btn-sirisa w-100 mb-3" onclick="signInWithEmail()">
+                    <i class="bi bi-box-arrow-in-right"></i> メールでサインイン
+                </button>
+                <p class="text-muted small text-center mb-0">
+                    アカウントをお持ちでない方は<a href="#" onclick="signUpWithEmail(); return false;">新規登録</a>
+                </p>
             </div>
         </div>
     </div>
@@ -146,40 +140,63 @@
         }
     });
 
-    // メールリンク送信
-    window.sendEmailLink = async function() {
+    // メール + パスワード認証
+    window.signInWithEmail = async function() {
         hideError();
         const email = document.getElementById('email-input').value.trim();
-        if (!email) {
-            showError('メールアドレスを入力してください。');
-            return;
-        }
+        const password = document.getElementById('password-input').value;
+        if (!email) { showError('メールアドレスを入力してください。'); return; }
+        if (!password) { showError('パスワードを入力してください。'); return; }
         showLoading();
         try {
-            const actionCodeSettings = {
-                url: window.location.origin + '{% url "accounts:email_link_callback" %}',
-                handleCodeInApp: true,
-            };
-            await auth.sendSignInLinkToEmail(email, actionCodeSettings);
-            // メールアドレスを localStorage に保存（コールバック時に使用）
-            window.localStorage.setItem('emailForSignIn', email);
-            hideLoading();
-            document.getElementById('email-form').classList.add('d-none');
-            document.getElementById('email-sent').classList.remove('d-none');
-            document.getElementById('sent-to-email').textContent = email;
+            const result = await auth.signInWithEmailAndPassword(email, password);
+            await sendTokenToServer(result.user);
         } catch (err) {
             hideLoading();
-            console.error('[SIRISA] Email link error:', err);
-            showError('メール送信エラー [' + (err.code || '') + ']: ' + err.message);
+            console.error('[SIRISA] Email sign-in error:', err);
+            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                showError('メールアドレスまたはパスワードが正しくありません。');
+            } else if (err.code === 'auth/too-many-requests') {
+                showError('ログイン試行回数が多すぎます。しばらくしてからお試しください。');
+            } else {
+                showError('認証エラー [' + (err.code || '') + ']: ' + err.message);
+            }
         }
     };
 
-    // Enter キーでメール送信
-    document.getElementById('email-input').addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            sendEmailLink();
+    // 新規登録（メール + パスワード）
+    window.signUpWithEmail = async function() {
+        hideError();
+        const email = document.getElementById('email-input').value.trim();
+        const password = document.getElementById('password-input').value;
+        if (!email) { showError('メールアドレスを入力してください。'); return; }
+        if (!password) { showError('パスワードを入力してください。'); return; }
+        if (password.length < 6) { showError('パスワードは6文字以上で入力してください。'); return; }
+        showLoading();
+        try {
+            const result = await auth.createUserWithEmailAndPassword(email, password);
+            await sendTokenToServer(result.user);
+        } catch (err) {
+            hideLoading();
+            console.error('[SIRISA] Email sign-up error:', err);
+            if (err.code === 'auth/email-already-in-use') {
+                showError('このメールアドレスは既に登録されています。サインインしてください。');
+            } else if (err.code === 'auth/weak-password') {
+                showError('パスワードが弱すぎます。6文字以上で入力してください。');
+            } else if (err.code === 'auth/invalid-email') {
+                showError('メールアドレスの形式が正しくありません。');
+            } else {
+                showError('登録エラー [' + (err.code || '') + ']: ' + err.message);
+            }
         }
+    };
+
+    // Enter キーでサインイン
+    document.getElementById('email-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); signInWithEmail(); }
+    });
+    document.getElementById('password-input').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); signInWithEmail(); }
     });
 })();
 </script>
